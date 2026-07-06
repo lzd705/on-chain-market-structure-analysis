@@ -1,2 +1,11 @@
 token_symbol,coingecko_id,chain,contract_address,cex_symbol,primary_cex,secondary_cex,dex_source,primary_dex,pool_address,notes
-
+UNI,uniswap,eth,0x1f9840a85d5af5bf1d1762f925bdaddc4201f984,UNI/USDT,binance,okx,geckoterminal,uniswap_v3,,DeFi DEX governance token
+AAVE,aave,eth,0x7fc66500c84a76ad7e9c93437bfc5ac33e2ddae9,AAVE/USDT,binance,okx,geckoterminal,uniswap_v3,,DeFi lending blue chip
+LINK,chainlink,eth,0x514910771af9ca656af840dff83e8264ecf986ca,LINK/USDT,binance,okx,geckoterminal,uniswap_v3,,Oracle infrastructure token
+ARB,arbitrum,arbitrum,0x912ce59144191c1204e64559fe8253a0e49e6548,ARB/USDT,binance,okx,geckoterminal,uniswap_v3,,Layer 2 token on Arbitrum
+OP,optimism,optimism,0x4200000000000000000000000000000000000042,OP/USDT,binance,okx,geckoterminal,velodrome_or_uniswap_v3,,Layer 2 token on Optimism
+LDO,lido-dao,eth,0x5a98fcbea516cf06857215779fd812ca3bef1b32,LDO/USDT,binance,okx,geckoterminal,uniswap_v3,,Liquid staking governance token
+CRV,curve-dao-token,eth,0xd533a949740bb3306d119cc777fa900ba034cd52,CRV/USDT,binance,okx,geckoterminal,curve_or_uniswap_v3,,Curve ecosystem token
+PENDLE,pendle,eth,0x808507121b80c02388fad14726482e061b8da827,PENDLE/USDT,binance,okx,geckoterminal,uniswap_v3,,Yield trading DeFi token
+PEPE,pepe,eth,0x6982508145454ce325ddbe47a25d4ec3d2311933,PEPE/USDT,binance,okx,geckoterminal,uniswap_v2_or_v3,,Meme token with high market attention
+ENA,ethena,eth,0x57e114b691db790c35207b2e685d4a43181e6061,ENA/USDT,binance,okx,geckoterminal,uniswap_v3,,Ethena ecosystem token
