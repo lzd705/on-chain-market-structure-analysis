@@ -25,6 +25,13 @@ CEX 与 DEX 成交量关系及动量因子研究
 - DEX_SHARE
 - VOL_DIVERGENCE
 - CEX_DEX_CONFIRMATION
+- MOM_7D / MOM_14D
+- MOM_30D / MOM_7D_SKIP_1D
+- CEX_VOL_GROWTH_7D / DEX_VOL_GROWTH_7D
+- TOTAL_VOL_Z / TOTAL_VOL_GROWTH_7D
+- DEX_SHARE_Z / DEX_SHARE_CHANGE_7D
+- JOINT_VOL_Z_MEAN / CEX_DEX_Z_PRODUCT
+- CEX_VOLUME_CONFIRMED_MOM_7D / DEX_VOLUME_CONFIRMED_MOM_7D
 
 ## Slide 5: Data Coverage
 
@@ -67,10 +74,12 @@ Message:
 ## Slide 9: Factor vs Future Return
 
 Insert `figures/factor_forward_return_bins.png`.
+Use `data/research/candidate_factor_forward_returns.csv` for the additional factor table.
 
 Message:
 
 - Compare future 1d / 3d / 7d returns across DEX_VOL_Z buckets.
+- Compare a small number of candidate factors before expanding the factor library.
 - Treat monotonicity as a hypothesis, not a proven strategy.
 
 ## Slide 10: Confirmation vs Single-sided Volume
@@ -88,7 +97,16 @@ Message:
 - Finding 2: fill from `reports/research_findings_summary.md`.
 - Finding 3: fill from `reports/research_findings_summary.md`.
 
-## Slide 12: Limitations and Next Steps
+## Slide 12: Robustness
+
+Use `data/research/factor_robustness_checks.csv`.
+
+Message:
+
+- Check whether the best-looking factors survive excluding PEPE and ARB.
+- Compare factor spreads by token group to avoid over-reading one-token effects.
+
+## Slide 13: Limitations and Next Steps
 
 - Short sample and limited DEX/CEX coverage.
 - Daily frequency cannot prove intraday causality.

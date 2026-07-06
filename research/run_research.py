@@ -28,6 +28,8 @@ LEAD_LAG_CORRELATION_PATH = RESEARCH_DIR / "lead_lag_correlation.csv"
 FACTOR_FORWARD_RETURNS_PATH = RESEARCH_DIR / "factor_forward_returns.csv"
 CONFIRMATION_FORWARD_RETURNS_PATH = RESEARCH_DIR / "confirmation_forward_returns.csv"
 DATA_QUALITY_REPORT_PATH = RESEARCH_DIR / "data_quality_report.csv"
+CANDIDATE_FACTOR_RETURNS_PATH = RESEARCH_DIR / "candidate_factor_forward_returns.csv"
+FACTOR_ROBUSTNESS_PATH = RESEARCH_DIR / "factor_robustness_checks.csv"
 
 np = None
 pd = None
@@ -39,6 +41,52 @@ CEX_VOLUME_ALIASES = ["cex_volume_usd", "quote_volume_usd", "volume_usd_cex", "c
 DEX_VOLUME_ALIASES = ["dex_volume_usd", "volume_usd_dex", "dex_volume", "volume_usd"]
 DATE_ALIASES = ["date", "day", "timestamp"]
 TOKEN_ALIASES = ["token_symbol", "symbol", "token"]
+TOKEN_GROUPS = {
+    "AAVE": "defi",
+    "ARB": "layer2",
+    "CRV": "defi",
+    "ENA": "defi",
+    "LDO": "defi",
+    "LINK": "infra",
+    "OP": "layer2",
+    "PENDLE": "defi",
+    "PEPE": "meme",
+    "UNI": "defi",
+}
+CANDIDATE_FACTOR_NAMES = [
+    "mom_7d",
+    "mom_14d",
+    "mom_30d",
+    "mom_7d_skip_1d",
+    "reversal_1d",
+    "realized_vol_14d",
+    "momentum_vol_adj_7d",
+    "total_vol_z",
+    "cex_vol_growth_7d",
+    "dex_vol_growth_7d",
+    "total_vol_growth_7d",
+    "dex_share_z",
+    "dex_share_change_7d",
+    "cex_dex_ratio_z",
+    "volume_growth_divergence_7d",
+    "joint_vol_z_mean",
+    "cex_dex_z_product",
+    "dex_share_x_dex_vol_z",
+    "cex_volume_confirmed_mom_7d",
+    "dex_volume_confirmed_mom_7d",
+    "joint_volume_confirmed_mom_7d",
+    "dex_share_confirmed_mom_7d",
+]
+ROBUSTNESS_FACTOR_NAMES = [
+    "cex_volume_confirmed_mom_7d",
+    "dex_volume_confirmed_mom_7d",
+    "joint_volume_confirmed_mom_7d",
+    "dex_share_x_dex_vol_z",
+    "volume_growth_divergence_7d",
+    "mom_14d",
+    "mom_30d",
+    "total_vol_z",
+]
 
 
 def resolve_path(path_text: str) -> Path:
@@ -56,6 +104,7 @@ def configure_paths(input_dir: Path, research_dir: Path, figures_dir: Path) -> N
     global FACTOR_PANEL_PATH, COVERAGE_SUMMARY_PATH, CEX_DEX_CORRELATION_PATH
     global LEAD_LAG_CORRELATION_PATH, FACTOR_FORWARD_RETURNS_PATH
     global CONFIRMATION_FORWARD_RETURNS_PATH, DATA_QUALITY_REPORT_PATH
+    global CANDIDATE_FACTOR_RETURNS_PATH, FACTOR_ROBUSTNESS_PATH
 
     INPUT_DIR = input_dir
     RESEARCH_DIR = research_dir
@@ -73,6 +122,8 @@ def configure_paths(input_dir: Path, research_dir: Path, figures_dir: Path) -> N
     FACTOR_FORWARD_RETURNS_PATH = RESEARCH_DIR / "factor_forward_returns.csv"
     CONFIRMATION_FORWARD_RETURNS_PATH = RESEARCH_DIR / "confirmation_forward_returns.csv"
     DATA_QUALITY_REPORT_PATH = RESEARCH_DIR / "data_quality_report.csv"
+    CANDIDATE_FACTOR_RETURNS_PATH = RESEARCH_DIR / "candidate_factor_forward_returns.csv"
+    FACTOR_ROBUSTNESS_PATH = RESEARCH_DIR / "factor_robustness_checks.csv"
 
 
 def ensure_output_dirs() -> None:
@@ -256,6 +307,18 @@ def rolling_z_score(series: pd.Series, window: int = 30, min_periods: int = 10) 
     return (series - rolling_mean) / rolling_std.replace(0, pd.NA)
 
 
+def rolling_volume_growth(series: pd.Series, window: int = 7) -> pd.Series:
+    """Compare recent rolling volume with the previous rolling window."""
+    recent = series.rolling(window=window, min_periods=window).sum()
+    previous = recent.shift(window)
+    return np.log(recent / previous.replace(0, pd.NA))
+
+
+def assign_token_group(token_symbol: str) -> str:
+    """Assign a coarse token group for robustness checks."""
+    return TOKEN_GROUPS.get(str(token_symbol).upper(), "other")
+
+
 def add_factors(panel: pd.DataFrame, drop_last_date: bool = True) -> pd.DataFrame:
     """Add returns, volume factors, and confirmation labels."""
     panel = panel.copy()
@@ -263,6 +326,7 @@ def add_factors(panel: pd.DataFrame, drop_last_date: bool = True) -> pd.DataFram
     if drop_last_date and not panel.empty:
         panel = panel[panel["date"] < panel["date"].max()].copy()
 
+    panel["token_group"] = panel["token_symbol"].map(assign_token_group)
     panel["cex_volume_usd"] = panel["cex_volume_usd"].fillna(0.0)
     panel["dex_volume_usd"] = panel["dex_volume_usd"].fillna(0.0)
     panel["total_volume_usd"] = panel["cex_volume_usd"] + panel["dex_volume_usd"]
@@ -271,15 +335,41 @@ def add_factors(panel: pd.DataFrame, drop_last_date: bool = True) -> pd.DataFram
     grouped = panel.groupby("token_symbol", group_keys=False)
     panel["return_1d"] = grouped["price_usd"].pct_change()
 
-    for horizon in [1, 3, 7]:
+    for horizon in [1, 3, 7, 14]:
         panel[f"future_return_{horizon}d"] = grouped["price_usd"].shift(-horizon) / panel["price_usd"] - 1
+
+    for lookback in [7, 14, 30]:
+        panel[f"mom_{lookback}d"] = np.log(panel["price_usd"] / grouped["price_usd"].shift(lookback))
+    panel["mom_7d_skip_1d"] = np.log(grouped["price_usd"].shift(1) / grouped["price_usd"].shift(8))
+    panel["reversal_1d"] = -panel["return_1d"]
+    panel["realized_vol_14d"] = grouped["return_1d"].transform(
+        lambda values: values.rolling(window=14, min_periods=7).std()
+    )
+    panel["momentum_vol_adj_7d"] = panel["mom_7d"] / panel["realized_vol_14d"].replace(0, pd.NA)
 
     panel["log_cex_volume"] = np.log1p(panel["cex_volume_usd"].clip(lower=0))
     panel["log_dex_volume"] = np.log1p(panel["dex_volume_usd"].clip(lower=0))
+    panel["log_total_volume"] = np.log1p(panel["total_volume_usd"].clip(lower=0))
+    panel["log_cex_dex_ratio"] = np.log((panel["cex_volume_usd"] + 1.0) / (panel["dex_volume_usd"] + 1.0))
 
     panel["cex_vol_z"] = grouped["log_cex_volume"].transform(rolling_z_score)
     panel["dex_vol_z"] = grouped["log_dex_volume"].transform(rolling_z_score)
+    panel["total_vol_z"] = grouped["log_total_volume"].transform(rolling_z_score)
+    panel["cex_dex_ratio_z"] = grouped["log_cex_dex_ratio"].transform(rolling_z_score)
+    panel["dex_share_z"] = grouped["dex_share"].transform(rolling_z_score)
+    panel["cex_vol_growth_7d"] = grouped["cex_volume_usd"].transform(rolling_volume_growth)
+    panel["dex_vol_growth_7d"] = grouped["dex_volume_usd"].transform(rolling_volume_growth)
+    panel["total_vol_growth_7d"] = grouped["total_volume_usd"].transform(rolling_volume_growth)
+    panel["dex_share_change_7d"] = panel["dex_share"] - grouped["dex_share"].shift(7)
     panel["volume_divergence"] = panel["dex_vol_z"] - panel["cex_vol_z"]
+    panel["volume_growth_divergence_7d"] = panel["dex_vol_growth_7d"] - panel["cex_vol_growth_7d"]
+    panel["joint_vol_z_mean"] = (panel["cex_vol_z"] + panel["dex_vol_z"]) / 2.0
+    panel["cex_dex_z_product"] = panel["cex_vol_z"] * panel["dex_vol_z"]
+    panel["dex_share_x_dex_vol_z"] = panel["dex_share"] * panel["dex_vol_z"]
+    panel["cex_volume_confirmed_mom_7d"] = panel["mom_7d"] * panel["cex_vol_z"]
+    panel["dex_volume_confirmed_mom_7d"] = panel["mom_7d"] * panel["dex_vol_z"]
+    panel["joint_volume_confirmed_mom_7d"] = panel["mom_7d"] * panel["joint_vol_z_mean"]
+    panel["dex_share_confirmed_mom_7d"] = panel["mom_7d"] * panel["dex_share_z"]
     panel["cex_dex_confirmation"] = (
         (panel["cex_vol_z"] > 1.0) & (panel["dex_vol_z"] > 1.0)
     ).astype(int)
@@ -395,6 +485,178 @@ def write_factor_forward_returns(panel: pd.DataFrame) -> None:
         future_return_7d_median=("future_return_7d", "median"),
     )
     summary.reset_index().to_csv(FACTOR_FORWARD_RETURNS_PATH, index=False)
+
+
+def write_candidate_factor_forward_returns(panel: pd.DataFrame) -> None:
+    """Write forward-return buckets for a small set of candidate factors."""
+    rows = []
+
+    for factor_name in CANDIDATE_FACTOR_NAMES:
+        if factor_name not in panel.columns:
+            continue
+
+        analysis_panel = panel.dropna(
+            subset=[
+                factor_name,
+                "future_return_1d",
+                "future_return_3d",
+                "future_return_7d",
+                "future_return_14d",
+            ]
+        ).copy()
+
+        unique_values = analysis_panel[factor_name].nunique()
+        if unique_values < 3:
+            continue
+
+        quantile_count = min(5, unique_values)
+        analysis_panel["factor_bucket"] = pd.qcut(
+            analysis_panel[factor_name],
+            q=quantile_count,
+            labels=False,
+            duplicates="drop",
+        )
+
+        for bucket, bucket_panel in analysis_panel.groupby("factor_bucket", observed=True):
+            rows.append(
+                {
+                    "factor_name": factor_name,
+                    "factor_bucket": int(bucket),
+                    "row_count": len(bucket_panel),
+                    "factor_mean": bucket_panel[factor_name].mean(),
+                    "future_return_1d_mean": bucket_panel["future_return_1d"].mean(),
+                    "future_return_3d_mean": bucket_panel["future_return_3d"].mean(),
+                    "future_return_7d_mean": bucket_panel["future_return_7d"].mean(),
+                    "future_return_14d_mean": bucket_panel["future_return_14d"].mean(),
+                    "future_return_1d_median": bucket_panel["future_return_1d"].median(),
+                    "future_return_3d_median": bucket_panel["future_return_3d"].median(),
+                    "future_return_7d_median": bucket_panel["future_return_7d"].median(),
+                    "future_return_14d_median": bucket_panel["future_return_14d"].median(),
+                    "future_return_1d_win_rate": (bucket_panel["future_return_1d"] > 0).mean(),
+                    "future_return_3d_win_rate": (bucket_panel["future_return_3d"] > 0).mean(),
+                    "future_return_7d_win_rate": (bucket_panel["future_return_7d"] > 0).mean(),
+                    "future_return_14d_win_rate": (bucket_panel["future_return_14d"] > 0).mean(),
+                }
+            )
+
+    pd.DataFrame(rows).to_csv(CANDIDATE_FACTOR_RETURNS_PATH, index=False)
+
+
+def calculate_factor_spread(
+    panel: pd.DataFrame,
+    factor_name: str,
+    return_column: str = "future_return_7d",
+    max_buckets: int = 5,
+):
+    """Calculate high-minus-low forward return spread for one factor subset."""
+    if factor_name not in panel.columns:
+        return None
+
+    analysis_panel = panel.dropna(subset=[factor_name, return_column]).copy()
+    unique_values = analysis_panel[factor_name].nunique()
+
+    if len(analysis_panel) < 30 or unique_values < 3:
+        return None
+
+    bucket_count = min(max_buckets, unique_values)
+
+    try:
+        analysis_panel["factor_bucket"] = pd.qcut(
+            analysis_panel[factor_name],
+            q=bucket_count,
+            labels=False,
+            duplicates="drop",
+        )
+    except ValueError:
+        return None
+
+    if analysis_panel["factor_bucket"].nunique() < 2:
+        return None
+
+    grouped = analysis_panel.groupby("factor_bucket", observed=True)
+    bucket_summary = grouped.agg(
+        row_count=(return_column, "count"),
+        factor_mean=(factor_name, "mean"),
+        return_mean=(return_column, "mean"),
+        return_median=(return_column, "median"),
+        win_rate=(return_column, lambda values: (values > 0).mean()),
+    ).reset_index()
+
+    low_bucket = bucket_summary.sort_values("factor_bucket").head(1).iloc[0]
+    high_bucket = bucket_summary.sort_values("factor_bucket").tail(1).iloc[0]
+
+    return {
+        "row_count": int(len(analysis_panel)),
+        "bucket_count": int(analysis_panel["factor_bucket"].nunique()),
+        "low_bucket_n": int(low_bucket["row_count"]),
+        "high_bucket_n": int(high_bucket["row_count"]),
+        "low_factor_mean": low_bucket["factor_mean"],
+        "high_factor_mean": high_bucket["factor_mean"],
+        "low_return_mean": low_bucket["return_mean"],
+        "high_return_mean": high_bucket["return_mean"],
+        "high_minus_low_return_mean": high_bucket["return_mean"] - low_bucket["return_mean"],
+        "low_return_median": low_bucket["return_median"],
+        "high_return_median": high_bucket["return_median"],
+        "low_win_rate": low_bucket["win_rate"],
+        "high_win_rate": high_bucket["win_rate"],
+    }
+
+
+def build_factor_robustness_rows(panel: pd.DataFrame) -> list[dict]:
+    """Build robustness rows by overall sample, exclusions, groups, and tokens."""
+    rows = []
+
+    def append_row(check_type: str, subset_name: str, subset_panel: pd.DataFrame, factor_name: str) -> None:
+        spread = calculate_factor_spread(subset_panel, factor_name)
+        if spread is None:
+            return
+
+        row = {
+            "check_type": check_type,
+            "subset_name": subset_name,
+            "factor_name": factor_name,
+        }
+        row.update(spread)
+        rows.append(row)
+
+    tokens = sorted(panel["token_symbol"].dropna().unique())
+
+    for factor_name in ROBUSTNESS_FACTOR_NAMES:
+        append_row("overall", "all_tokens", panel, factor_name)
+
+        for token_symbol in tokens:
+            append_row(
+                "leave_one_token_out",
+                "exclude_" + token_symbol.lower(),
+                panel[panel["token_symbol"] != token_symbol],
+                factor_name,
+            )
+
+        append_row(
+            "named_exclusion",
+            "exclude_pepe_arb",
+            panel[~panel["token_symbol"].isin(["PEPE", "ARB"])],
+            factor_name,
+        )
+        append_row(
+            "named_exclusion",
+            "exclude_meme_layer2",
+            panel[~panel["token_group"].isin(["meme", "layer2"])],
+            factor_name,
+        )
+
+        for token_group, group_panel in panel.groupby("token_group"):
+            append_row("token_group", str(token_group), group_panel, factor_name)
+
+        for token_symbol, token_panel in panel.groupby("token_symbol"):
+            append_row("single_token", str(token_symbol), token_panel, factor_name)
+
+    return rows
+
+
+def write_factor_robustness_checks(panel: pd.DataFrame) -> None:
+    """Write robustness checks for the most relevant candidate factors."""
+    pd.DataFrame(build_factor_robustness_rows(panel)).to_csv(FACTOR_ROBUSTNESS_PATH, index=False)
 
 
 def write_confirmation_forward_returns(panel: pd.DataFrame) -> None:
@@ -592,6 +854,8 @@ def run(
     write_cex_dex_correlation(factor_panel)
     lead_lag = calculate_lead_lag(factor_panel)
     write_factor_forward_returns(factor_panel)
+    write_candidate_factor_forward_returns(factor_panel)
+    write_factor_robustness_checks(factor_panel)
     write_confirmation_forward_returns(factor_panel)
 
     plot_token_time_series(factor_panel)

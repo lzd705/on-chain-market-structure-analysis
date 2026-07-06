@@ -41,6 +41,22 @@ DEX_VOL_Z = rolling_z_score(log1p(dex_volume_usd), 30d)
 DEX_SHARE = dex_volume_usd / (cex_volume_usd + dex_volume_usd)
 VOL_DIVERGENCE = DEX_VOL_Z - CEX_VOL_Z
 CEX_DEX_CONFIRMATION = 1 if CEX_VOL_Z > 1 and DEX_VOL_Z > 1 else 0
+MOM_7D = log(price_t / price_t-7)
+MOM_14D = log(price_t / price_t-14)
+MOM_30D = log(price_t / price_t-30)
+MOM_7D_SKIP_1D = log(price_t-1 / price_t-8)
+CEX_VOL_GROWTH_7D = log(CEX_volume_recent_7d / CEX_volume_previous_7d)
+DEX_VOL_GROWTH_7D = log(DEX_volume_recent_7d / DEX_volume_previous_7d)
+TOTAL_VOL_Z = rolling_z_score(log1p(total_volume_usd), 30d)
+TOTAL_VOL_GROWTH_7D = log(total_volume_recent_7d / total_volume_previous_7d)
+DEX_SHARE_Z = rolling_z_score(DEX_SHARE, 30d)
+DEX_SHARE_CHANGE_7D = DEX_SHARE_t - DEX_SHARE_t-7
+VOLUME_GROWTH_DIVERGENCE_7D = DEX_VOL_GROWTH_7D - CEX_VOL_GROWTH_7D
+JOINT_VOL_Z_MEAN = (CEX_VOL_Z + DEX_VOL_Z) / 2
+CEX_DEX_Z_PRODUCT = CEX_VOL_Z * DEX_VOL_Z
+CEX_VOLUME_CONFIRMED_MOM_7D = MOM_7D * CEX_VOL_Z
+DEX_VOLUME_CONFIRMED_MOM_7D = MOM_7D * DEX_VOL_Z
+JOINT_VOLUME_CONFIRMED_MOM_7D = MOM_7D * JOINT_VOL_Z_MEAN
 ```
 
 成交量状态分为：
@@ -67,6 +83,8 @@ corr(CEX_VOL_Z_t, DEX_VOL_Z_t+lag)
 其中 lag > 0 表示 CEX 今天和未来 DEX 的相关性，lag < 0 表示 DEX 今天和未来 CEX 的相关性。
 
 第四步检验 DEX_VOL_Z 与未来 1d、3d、7d 收益的关系，并比较 CEX + DEX 同时放量、CEX 单边放量、DEX 单边放量和普通状态下的未来收益。
+
+第五步对候选因子做分桶检验，包括价格动量、跳过最近一天动量、成交量增长、DEX_SHARE 变化、CEX/DEX 背离、共振强度和成交量确认动量。第一版只看未来 1d、3d、7d、14d 平均收益、中位数和胜率，不直接解释为可交易策略。
 
 ## 5. 初步图表清单
 
@@ -130,6 +148,8 @@ data/research/coverage_summary.csv
 data/research/cex_dex_correlation.csv
 data/research/lead_lag_correlation.csv
 data/research/factor_forward_returns.csv
+data/research/candidate_factor_forward_returns.csv
+data/research/factor_robustness_checks.csv
 data/research/confirmation_forward_returns.csv
 reports/research_findings_summary.md
 ```

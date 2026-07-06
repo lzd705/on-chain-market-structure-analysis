@@ -45,11 +45,38 @@ class ResearchFactorTests(unittest.TestCase):
         result = run_research.add_factors(panel, drop_last_date=False)
 
         self.assertIn("cex_vol_z", result.columns)
+        self.assertIn("token_group", result.columns)
         self.assertIn("dex_vol_z", result.columns)
+        self.assertIn("mom_7d", result.columns)
+        self.assertIn("mom_14d", result.columns)
+        self.assertIn("mom_30d", result.columns)
+        self.assertIn("mom_7d_skip_1d", result.columns)
+        self.assertIn("reversal_1d", result.columns)
+        self.assertIn("realized_vol_14d", result.columns)
+        self.assertIn("momentum_vol_adj_7d", result.columns)
+        self.assertIn("total_vol_z", result.columns)
+        self.assertIn("cex_vol_growth_7d", result.columns)
+        self.assertIn("dex_vol_growth_7d", result.columns)
+        self.assertIn("total_vol_growth_7d", result.columns)
+        self.assertIn("dex_share_z", result.columns)
+        self.assertIn("dex_share_change_7d", result.columns)
+        self.assertIn("cex_dex_ratio_z", result.columns)
+        self.assertIn("volume_growth_divergence_7d", result.columns)
+        self.assertIn("joint_vol_z_mean", result.columns)
+        self.assertIn("cex_dex_z_product", result.columns)
+        self.assertIn("dex_share_x_dex_vol_z", result.columns)
+        self.assertIn("cex_volume_confirmed_mom_7d", result.columns)
+        self.assertIn("dex_volume_confirmed_mom_7d", result.columns)
+        self.assertIn("joint_volume_confirmed_mom_7d", result.columns)
+        self.assertIn("dex_share_confirmed_mom_7d", result.columns)
         self.assertIn("dex_share", result.columns)
         self.assertIn("future_return_7d", result.columns)
+        self.assertIn("future_return_14d", result.columns)
         self.assertAlmostEqual(result.loc[0, "future_return_1d"], 0.1)
         self.assertGreater(result["cex_vol_z"].notna().sum(), 0)
+        self.assertGreater(result["mom_7d"].notna().sum(), 0)
+        self.assertGreater(result["cex_vol_growth_7d"].notna().sum(), 0)
+        self.assertGreater(result["joint_vol_z_mean"].notna().sum(), 0)
 
     def test_short_tokens_are_filtered(self) -> None:
         long_panel = self.make_panel("LONG", 40)
@@ -74,6 +101,36 @@ class ResearchFactorTests(unittest.TestCase):
 
         self.assertEqual(len(result), 5)
         self.assertEqual(set(result["lag"]), {-2, -1, 0, 1, 2})
+
+    def test_candidate_factor_summary_is_written(self) -> None:
+        panel = self.make_panel("AAA", 50)
+        factor_panel = run_research.add_factors(panel, drop_last_date=False)
+
+        run_research.write_candidate_factor_forward_returns(factor_panel)
+
+        output = run_research.pd.read_csv(run_research.CANDIDATE_FACTOR_RETURNS_PATH)
+        self.assertIn("factor_name", output.columns)
+        self.assertIn("mom_7d", set(output["factor_name"]))
+        self.assertIn("joint_vol_z_mean", set(output["factor_name"]))
+        self.assertIn("future_return_14d_mean", output.columns)
+
+    def test_factor_robustness_checks_are_written(self) -> None:
+        panel = pd.concat(
+            [
+                self.make_panel("AAVE", 55),
+                self.make_panel("ARB", 55),
+                self.make_panel("PEPE", 55),
+            ],
+            ignore_index=True,
+        )
+        factor_panel = run_research.add_factors(panel, drop_last_date=False)
+
+        run_research.write_factor_robustness_checks(factor_panel)
+
+        output = run_research.pd.read_csv(run_research.FACTOR_ROBUSTNESS_PATH)
+        self.assertIn("check_type", output.columns)
+        self.assertIn("overall", set(output["check_type"]))
+        self.assertIn("exclude_pepe_arb", set(output["subset_name"]))
 
 
 if __name__ == "__main__":

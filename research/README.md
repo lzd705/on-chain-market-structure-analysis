@@ -23,6 +23,8 @@ data/research/coverage_summary.csv
 data/research/cex_dex_correlation.csv
 data/research/lead_lag_correlation.csv
 data/research/factor_forward_returns.csv
+data/research/candidate_factor_forward_returns.csv
+data/research/factor_robustness_checks.csv
 data/research/confirmation_forward_returns.csv
 
 figures/time_series/*.png

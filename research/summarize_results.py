@@ -46,6 +46,8 @@ def build_summary(research_dir: Path, figures_dir: Path) -> str:
     correlation = read_csv_if_exists(research_dir / "cex_dex_correlation.csv")
     lead_lag = read_csv_if_exists(research_dir / "lead_lag_correlation.csv")
     factor_returns = read_csv_if_exists(research_dir / "factor_forward_returns.csv")
+    candidate_factor_returns = read_csv_if_exists(research_dir / "candidate_factor_forward_returns.csv")
+    robustness = read_csv_if_exists(research_dir / "factor_robustness_checks.csv")
     confirmation = read_csv_if_exists(research_dir / "confirmation_forward_returns.csv")
     quality = read_csv_if_exists(research_dir / "data_quality_report.csv")
 
@@ -117,6 +119,54 @@ def build_summary(research_dir: Path, figures_dir: Path) -> str:
                 "",
             ]
         )
+
+    if not candidate_factor_returns.empty:
+        lines.extend(["## Candidate Factor Buckets", ""])
+        for factor_name, factor_panel in candidate_factor_returns.groupby("factor_name"):
+            sorted_factor = factor_panel.sort_values("factor_bucket")
+            low_bucket = sorted_factor.head(1).iloc[0]
+            high_bucket = sorted_factor.tail(1).iloc[0]
+            spread = high_bucket["future_return_7d_mean"] - low_bucket["future_return_7d_mean"]
+            lines.append(
+                f"- {factor_name}: high-minus-low 7d mean spread {pct(spread)} "
+                f"(low {pct(low_bucket['future_return_7d_mean'])}, high {pct(high_bucket['future_return_7d_mean'])})"
+            )
+        lines.append("")
+
+    if not robustness.empty:
+        lines.extend(["## Robustness Checks", ""])
+        overall = robustness[robustness["check_type"] == "overall"]
+        exclude_pepe_arb = robustness[robustness["subset_name"] == "exclude_pepe_arb"]
+
+        merged = overall.merge(
+            exclude_pepe_arb,
+            on="factor_name",
+            suffixes=("_overall", "_exclude_pepe_arb"),
+        )
+        merged["spread_change"] = (
+            merged["high_minus_low_return_mean_exclude_pepe_arb"]
+            - merged["high_minus_low_return_mean_overall"]
+        )
+        merged = merged.sort_values("high_minus_low_return_mean_overall", ascending=False)
+
+        for _, row in merged.head(6).iterrows():
+            lines.append(
+                f"- {row['factor_name']}: overall spread {pct(row['high_minus_low_return_mean_overall'])}, "
+                f"excluding PEPE+ARB {pct(row['high_minus_low_return_mean_exclude_pepe_arb'])}, "
+                f"change {pct(row['spread_change'])}"
+            )
+
+        group_rows = robustness[robustness["check_type"] == "token_group"].copy()
+        if not group_rows.empty:
+            strongest = group_rows.sort_values("high_minus_low_return_mean", ascending=False).head(5)
+            lines.append("")
+            lines.append("Strongest token-group spreads:")
+            for _, row in strongest.iterrows():
+                lines.append(
+                    f"- {row['subset_name']} / {row['factor_name']}: {pct(row['high_minus_low_return_mean'])}, n={int(row['row_count'])}"
+                )
+
+        lines.append("")
 
     if not confirmation.empty:
         ordered = confirmation.sort_values("future_return_7d_mean", ascending=False)
