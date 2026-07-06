@@ -3,10 +3,14 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from scripts.fetch_dex import choose_main_pool
+from scripts.fetch_dex import choose_top_pools
 from scripts.fetch_dex import convert_ohlcv_row
 from scripts.fetch_dex import get_retry_wait_seconds
+from scripts.fetch_dex import get_status_code
 from scripts.fetch_dex import get_token_side
 from scripts.fetch_dex import safe_float
+from scripts.fetch_dex import aggregate_dex_pool_rows
+from scripts.fetch_dex import filter_complete_dates
 from scripts.fetch_dex import sort_pools_by_volume
 from scripts.fetch_dex import write_pool_rows
 
@@ -20,6 +24,17 @@ class FetchDexTests(unittest.TestCase):
     def test_get_retry_wait_seconds_defaults_rate_limit_to_one_minute(self):
         result = get_retry_wait_seconds(429, None)
         self.assertEqual(result, 65)
+
+    def test_get_retry_wait_seconds_uses_retry_after_header(self):
+        result = get_retry_wait_seconds(429, "12")
+        self.assertEqual(result, 12)
+
+    def test_get_status_code_detects_429_from_error_text(self):
+        error = RuntimeError("HTTP Error 429: Too Many Requests")
+
+        result = get_status_code(error)
+
+        self.assertEqual(result, 429)
 
     def test_choose_main_pool_uses_highest_24h_volume(self):
         pools = [
@@ -58,6 +73,70 @@ class FetchDexTests(unittest.TestCase):
         self.assertEqual(result["pool_name"], "SMALL / WETH")
         self.assertEqual(result["pool_tvl_usd"], 100.0)
         self.assertEqual(result["volume_24h_usd"], 1000.0)
+
+    def test_choose_top_pools_uses_three_highest_24h_volumes(self):
+        pools = [
+            {
+                "attributes": {
+                    "address": "0xone",
+                    "name": "ONE / WETH",
+                    "reserve_in_usd": "100",
+                    "volume_usd": {"h24": "10"},
+                },
+                "relationships": {
+                    "base_token": {"data": {"id": "eth_0xone"}},
+                    "quote_token": {"data": {"id": "eth_0xweth"}},
+                    "dex": {"data": {"id": "uniswap_v2"}},
+                },
+            },
+            {
+                "attributes": {
+                    "address": "0xtwo",
+                    "name": "TWO / WETH",
+                    "reserve_in_usd": "200",
+                    "volume_usd": {"h24": "40"},
+                },
+                "relationships": {
+                    "base_token": {"data": {"id": "eth_0xtwo"}},
+                    "quote_token": {"data": {"id": "eth_0xweth"}},
+                    "dex": {"data": {"id": "uniswap_v3"}},
+                },
+            },
+            {
+                "attributes": {
+                    "address": "0xthree",
+                    "name": "THREE / WETH",
+                    "reserve_in_usd": "300",
+                    "volume_usd": {"h24": "30"},
+                },
+                "relationships": {
+                    "base_token": {"data": {"id": "eth_0xthree"}},
+                    "quote_token": {"data": {"id": "eth_0xweth"}},
+                    "dex": {"data": {"id": "sushiswap"}},
+                },
+            },
+            {
+                "attributes": {
+                    "address": "0xfour",
+                    "name": "FOUR / WETH",
+                    "reserve_in_usd": "400",
+                    "volume_usd": {"h24": "20"},
+                },
+                "relationships": {
+                    "base_token": {"data": {"id": "eth_0xfour"}},
+                    "quote_token": {"data": {"id": "eth_0xweth"}},
+                    "dex": {"data": {"id": "curve"}},
+                },
+            },
+        ]
+
+        result = choose_top_pools(pools, 3)
+
+        addresses = []
+        for pool in result:
+            addresses.append(pool["pool_address"])
+
+        self.assertEqual(addresses, ["0xtwo", "0xthree", "0xfour"])
 
     def test_get_token_side_detects_quote_token(self):
         pool = {
@@ -142,6 +221,61 @@ class FetchDexTests(unittest.TestCase):
             text = output_path.read_text()
             self.assertIn("base_token_id", text)
             self.assertIn("quote_token_id", text)
+
+    def test_aggregate_dex_pool_rows_sums_top_pool_volume(self):
+        rows = [
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "chain": "eth",
+                "dex": "uniswap_v3",
+                "pool_address": "0xpool1",
+                "pool_name": "UNI / WETH",
+                "dex_volume_usd": 100.0,
+            },
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "chain": "eth",
+                "dex": "sushiswap",
+                "pool_address": "0xpool2",
+                "pool_name": "UNI / USDC",
+                "dex_volume_usd": 200.0,
+            },
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "chain": "eth",
+                "dex": "curve",
+                "pool_address": "0xpool3",
+                "pool_name": "UNI / ETH",
+                "dex_volume_usd": 300.0,
+            },
+        ]
+
+        result = aggregate_dex_pool_rows(rows)
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["date"], "2024-01-01")
+        self.assertEqual(result[0]["token_symbol"], "UNI")
+        self.assertEqual(result[0]["chain"], "eth")
+        self.assertEqual(result[0]["dex_volume_usd"], 600.0)
+        self.assertEqual(result[0]["pool_count"], 3)
+        self.assertEqual(result[0]["included_dexes"], "curve;sushiswap;uniswap_v3")
+        self.assertEqual(result[0]["included_pool_addresses"], "0xpool1;0xpool2;0xpool3")
+
+    def test_filter_complete_dates_keeps_dates_with_all_tokens(self):
+        rows = [
+            {"date": "2024-01-01", "token_symbol": "AAVE"},
+            {"date": "2024-01-01", "token_symbol": "UNI"},
+            {"date": "2024-01-02", "token_symbol": "UNI"},
+        ]
+
+        result = filter_complete_dates(rows, 2)
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[0]["date"], "2024-01-01")
+        self.assertEqual(result[1]["date"], "2024-01-01")
 
 
 if __name__ == "__main__":
