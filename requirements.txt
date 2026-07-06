@@ -1,0 +1,6 @@
+pandas
+requests
+ccxt
+pyarrow
+python-dotenv
+

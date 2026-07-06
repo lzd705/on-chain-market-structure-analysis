@@ -1,0 +1,16 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+.env
+.venv/
+venv/
+
+# Keep raw downloaded data local by default; commit curated processed outputs only when useful.
+data/raw/*
+!data/raw/**/
+!data/raw/**/.gitkeep
+
