@@ -1,0 +1,6 @@
+token_symbol,start_date,end_date,row_count,status,missing_dates,duplicate_rows,missing_price,missing_cex_volume,missing_dex_volume,zero_cex_volume,zero_dex_volume
+AAVE,2026-01-01,2026-04-30,120,ok,0,0,0,0,0,0,0
+ARB,2026-01-01,2026-04-30,120,ok,0,0,0,0,0,0,0
+LINK,2026-01-01,2026-04-30,120,ok,0,0,0,0,0,0,0
+OP,2026-01-01,2026-04-30,120,ok,0,0,0,0,0,0,0
+UNI,2026-01-01,2026-04-30,120,ok,0,0,0,0,0,0,0
