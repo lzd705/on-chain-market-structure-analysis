@@ -9,9 +9,8 @@ config/tokens.csv
   -> fetch CEX daily volume
   -> fetch DEX pool-level daily volume
   -> aggregate DEX top 3 pools by token/date
-  -> fetch daily price
-  -> clean and align
-  -> calculate metrics
+  -> merge CEX and DEX rows by date/token
+  -> calculate basic volume metrics
   -> export merged_volume_panel.csv
 ```
 
@@ -28,20 +27,32 @@ dex_volume_daily.csv
   token-date daily DEX volume aggregated from selected pools
 ```
 
-## Expected final panel columns
+## Current merged panel columns
 
 ```text
 date
 token_symbol
 price_usd
-return_1d
-future_return_1d
-future_return_3d
-future_return_7d
 cex_volume_usd
 dex_volume_usd
 total_volume_usd
 dex_share
+cex_to_dex_ratio
+exchange_count
+included_exchanges
+chain
+pool_count
+included_dexes
+included_pool_addresses
+```
+
+## Next factor columns
+
+```text
+return_1d
+future_return_1d
+future_return_3d
+future_return_7d
 cex_vol_z_30d
 dex_vol_z_30d
 cex_volume_growth_7d
