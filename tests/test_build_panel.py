@@ -29,6 +29,7 @@ class BuildPanelTests(unittest.TestCase):
                 "date": "2024-01-01",
                 "token_symbol": "UNI",
                 "chain": "eth",
+                "selected_chains": "arbitrum;eth",
                 "dex_volume_usd": "300.0",
                 "pool_count": "3",
                 "included_dexes": "uniswap_v3",
@@ -58,6 +59,7 @@ class BuildPanelTests(unittest.TestCase):
         self.assertEqual(result[0]["cex_to_dex_ratio"], 700.0 / 300.0)
         self.assertEqual(result[0]["exchange_count"], 3)
         self.assertEqual(result[0]["pool_count"], 3)
+        self.assertEqual(result[0]["selected_chains"], "arbitrum;eth")
 
 
 if __name__ == "__main__":

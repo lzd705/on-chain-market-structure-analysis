@@ -2,7 +2,8 @@
 
 This first version is intentionally simple:
     - Read token config from config/tokens.csv
-    - Find the top DEX pools on the configured chain for each token
+    - Read token-chain config from config/token_chains.csv
+    - Find the global top DEX pools across configured chains for each token
     - Fetch daily OHLCV for those pools
     - Write data/processed/dex_pools.csv
     - Write data/processed/dex_pool_volume_daily.csv
@@ -21,6 +22,7 @@ from pathlib import Path
 
 
 TOKEN_CONFIG_PATH = Path("config/tokens.csv")
+TOKEN_CHAIN_CONFIG_PATH = Path("config/token_chains.csv")
 DEX_POOLS_OUTPUT_PATH = Path("data/processed/dex_pools.csv")
 DEX_POOL_VOLUME_OUTPUT_PATH = Path("data/processed/dex_pool_volume_daily.csv")
 DEX_VOLUME_OUTPUT_PATH = Path("data/processed/dex_volume_daily.csv")
@@ -31,7 +33,7 @@ REQUEST_SLEEP_SECONDS = 15.0
 MAX_RETRIES = 3
 MIN_HISTORY_DAYS = 120
 MAX_POOL_CANDIDATES = 8
-TOP_POOL_COUNT = 3
+TOP_POOL_COUNT = 5
 
 
 def safe_float(value) -> float:
@@ -133,6 +135,44 @@ def read_token_config(path: Path):
     return rows
 
 
+def group_chain_rows_by_token(rows):
+    """Group token-chain config rows by token symbol."""
+    grouped = {}
+
+    for row in rows:
+        token_symbol = row["token_symbol"]
+
+        if token_symbol not in grouped:
+            grouped[token_symbol] = []
+
+        grouped[token_symbol].append(row)
+
+    return grouped
+
+
+def read_token_chain_config(path: Path, token_rows):
+    """Read token-chain config, falling back to config/tokens.csv chains."""
+    if path.exists():
+        with path.open("r", newline="") as file:
+            reader = csv.DictReader(file)
+            rows = list(reader)
+
+        return rows
+
+    rows = []
+    for token in token_rows:
+        rows.append(
+            {
+                "token_symbol": token["token_symbol"],
+                "chain": token["chain"],
+                "contract_address": token["contract_address"],
+                "notes": "fallback from tokens.csv",
+            }
+        )
+
+    return rows
+
+
 def build_pool_result(pool_data):
     """Convert GeckoTerminal pool data into our pool row."""
     attributes = pool_data.get("attributes", {})
@@ -189,6 +229,28 @@ def add_token_fields(pool, token, pool_rank):
     pool["ohlcv_token"] = get_token_side(pool, chain, contract_address)
 
     return pool
+
+
+def fetch_pool_candidates_for_chain(chain_row):
+    """Fetch candidate pools for one token on one chain."""
+    chain = chain_row["chain"]
+    contract_address = chain_row["contract_address"]
+
+    path = "/networks/%s/tokens/%s/pools" % (chain, contract_address)
+    url = GECKOTERMINAL_BASE_URL + path
+
+    data = request_json(url)
+    pools = data.get("data", [])
+    sorted_pools = sort_pools_by_volume(pools)
+    candidates = sorted_pools[:MAX_POOL_CANDIDATES]
+
+    results = []
+    for pool_data in candidates:
+        pool = build_pool_result(pool_data)
+        add_token_fields(pool, chain_row, 0)
+        results.append(pool)
+
+    return results
 
 
 def find_main_pool(token):
@@ -265,28 +327,32 @@ def find_pool_with_ohlcv(token):
     return fallback_pool, fallback_ohlcv_list
 
 
-def find_top_pools_with_ohlcv(token):
-    """Find top pools with enough daily OHLCV history for one token."""
-    chain = token["chain"]
-    contract_address = token["contract_address"]
+def find_top_pools_with_ohlcv(token, chain_rows):
+    """Find global top pools with enough daily OHLCV history for one token."""
+    candidates = []
 
-    path = "/networks/%s/tokens/%s/pools" % (chain, contract_address)
-    url = GECKOTERMINAL_BASE_URL + path
+    for chain_row in chain_rows:
+        try:
+            chain_candidates = fetch_pool_candidates_for_chain(chain_row)
+        except Exception as error:
+            print(
+                "Failed candidate list for %s on %s: %s"
+                % (token["token_symbol"], chain_row["chain"], error)
+            )
+            time.sleep(REQUEST_SLEEP_SECONDS)
+            continue
 
-    data = request_json(url)
-    pools = data.get("data", [])
-    sorted_pools = sort_pools_by_volume(pools)
-    candidates = sorted_pools[:MAX_POOL_CANDIDATES]
+        candidates.extend(chain_candidates)
+        time.sleep(REQUEST_SLEEP_SECONDS)
+
+    candidates = sorted(candidates, key=lambda pool: pool["volume_24h_usd"], reverse=True)
 
     selected = []
     fallback = []
 
-    time.sleep(REQUEST_SLEEP_SECONDS)
-
-    for pool_data in candidates:
-        pool = build_pool_result(pool_data)
+    for pool in candidates:
         pool_rank = len(selected) + 1
-        add_token_fields(pool, token, pool_rank)
+        pool["pool_rank"] = pool_rank
 
         try:
             ohlcv_list = fetch_pool_ohlcv(pool)
@@ -353,32 +419,36 @@ def aggregate_dex_pool_rows(rows):
     groups = {}
 
     for row in rows:
-        key = (row["date"], row["token_symbol"], row["chain"])
+        key = (row["date"], row["token_symbol"])
 
         if key not in groups:
             groups[key] = {
                 "date": row["date"],
                 "token_symbol": row["token_symbol"],
-                "chain": row["chain"],
                 "dex_volume_usd": 0.0,
                 "pool_addresses": set(),
                 "dexes": set(),
+                "chains": set(),
             }
 
         groups[key]["dex_volume_usd"] += float(row["dex_volume_usd"])
         groups[key]["pool_addresses"].add(row["pool_address"])
         groups[key]["dexes"].add(row["dex"])
+        groups[key]["chains"].add(row["chain"])
 
     result = []
     for item in groups.values():
         pool_addresses = sorted(item["pool_addresses"])
         dexes = sorted(item["dexes"])
+        chains = sorted(item["chains"])
+        selected_chains = ";".join(chains)
 
         result.append(
             {
                 "date": item["date"],
                 "token_symbol": item["token_symbol"],
-                "chain": item["chain"],
+                "chain": selected_chains,
+                "selected_chains": selected_chains,
                 "dex_volume_usd": item["dex_volume_usd"],
                 "pool_count": len(pool_addresses),
                 "included_dexes": ";".join(dexes),
@@ -498,6 +568,7 @@ def write_volume_rows(rows, output_path: Path):
         "date",
         "token_symbol",
         "chain",
+        "selected_chains",
         "dex_volume_usd",
         "pool_count",
         "included_dexes",
@@ -515,14 +586,21 @@ def write_volume_rows(rows, output_path: Path):
 def main() -> None:
     """Fetch DEX data into processed CSV files."""
     token_rows = read_token_config(TOKEN_CONFIG_PATH)
+    chain_rows = read_token_chain_config(TOKEN_CHAIN_CONFIG_PATH, token_rows)
+    chain_rows_by_token = group_chain_rows_by_token(chain_rows)
     selected_pools = []
     pool_volume_rows = []
 
     for token in token_rows:
         token_symbol = token["token_symbol"]
+        token_chain_rows = chain_rows_by_token.get(token_symbol, [])
+
+        if len(token_chain_rows) == 0:
+            print("No token-chain config found for %s" % token_symbol)
+            continue
 
         try:
-            pool_results = find_top_pools_with_ohlcv(token)
+            pool_results = find_top_pools_with_ohlcv(token, token_chain_rows)
         except Exception as error:
             print("Failed %s: %s" % (token_symbol, error))
             continue

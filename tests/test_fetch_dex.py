@@ -5,6 +5,7 @@ from tempfile import TemporaryDirectory
 from scripts.fetch_dex import choose_main_pool
 from scripts.fetch_dex import choose_top_pools
 from scripts.fetch_dex import convert_ohlcv_row
+from scripts.fetch_dex import group_chain_rows_by_token
 from scripts.fetch_dex import get_retry_wait_seconds
 from scripts.fetch_dex import get_status_code
 from scripts.fetch_dex import get_token_side
@@ -13,6 +14,7 @@ from scripts.fetch_dex import aggregate_dex_pool_rows
 from scripts.fetch_dex import filter_complete_dates
 from scripts.fetch_dex import sort_pools_by_volume
 from scripts.fetch_dex import write_pool_rows
+from scripts.fetch_dex import TOP_POOL_COUNT
 
 
 class FetchDexTests(unittest.TestCase):
@@ -137,6 +139,35 @@ class FetchDexTests(unittest.TestCase):
             addresses.append(pool["pool_address"])
 
         self.assertEqual(addresses, ["0xtwo", "0xthree", "0xfour"])
+
+    def test_top_pool_count_is_five_for_multichain_dex(self):
+        self.assertEqual(TOP_POOL_COUNT, 5)
+
+    def test_group_chain_rows_by_token_groups_multichain_config(self):
+        rows = [
+            {
+                "token_symbol": "UNI",
+                "chain": "eth",
+                "contract_address": "0xeth",
+            },
+            {
+                "token_symbol": "UNI",
+                "chain": "arbitrum",
+                "contract_address": "0xarb",
+            },
+            {
+                "token_symbol": "AAVE",
+                "chain": "eth",
+                "contract_address": "0xaave",
+            },
+        ]
+
+        result = group_chain_rows_by_token(rows)
+
+        self.assertEqual(len(result["UNI"]), 2)
+        self.assertEqual(result["UNI"][0]["chain"], "eth")
+        self.assertEqual(result["UNI"][1]["chain"], "arbitrum")
+        self.assertEqual(len(result["AAVE"]), 1)
 
     def test_get_token_side_detects_quote_token(self):
         pool = {
@@ -263,6 +294,32 @@ class FetchDexTests(unittest.TestCase):
         self.assertEqual(result[0]["pool_count"], 3)
         self.assertEqual(result[0]["included_dexes"], "curve;sushiswap;uniswap_v3")
         self.assertEqual(result[0]["included_pool_addresses"], "0xpool1;0xpool2;0xpool3")
+
+    def test_aggregate_dex_pool_rows_keeps_selected_chains(self):
+        rows = [
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "chain": "eth",
+                "dex": "uniswap_v3",
+                "pool_address": "0xpool1",
+                "pool_name": "UNI / WETH",
+                "dex_volume_usd": 100.0,
+            },
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "chain": "arbitrum",
+                "dex": "uniswap_v3_arbitrum",
+                "pool_address": "0xpool2",
+                "pool_name": "UNI / WETH",
+                "dex_volume_usd": 200.0,
+            },
+        ]
+
+        result = aggregate_dex_pool_rows(rows)
+
+        self.assertEqual(result[0]["selected_chains"], "arbitrum;eth")
 
     def test_filter_complete_dates_keeps_dates_with_all_tokens(self):
         rows = [

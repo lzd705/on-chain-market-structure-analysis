@@ -8,7 +8,7 @@ This document should explain how the data pipeline builds the CEX / DEX daily vo
 - Initial target window: recent 3-6 months
 - Initial sample size: 10-20 tokens
 - CEX coverage: 10 major spot exchanges
-- DEX coverage: start with top 3 pools on the configured chain for each token
+- DEX coverage: global top 5 pools across configured chains for each token
 
 Current CEX exchanges:
 
@@ -38,5 +38,5 @@ Kraken
 - Raw wallet-level swap attribution is out of scope for the first version.
 - CEX volume is major-exchange coverage, not guaranteed total CEX market volume.
 - Coinbase and Kraken candles provide base volume, so quote volume is approximated as close price times base volume.
-- DEX volume is single-chain top-pool coverage, not guaranteed total cross-chain DEX market volume.
+- DEX volume is multi-chain top-pool coverage, not guaranteed total cross-chain DEX market volume.
 - DEX pool selection must be documented per token in `data/processed/dex_pools.csv`.
