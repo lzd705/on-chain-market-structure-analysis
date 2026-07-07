@@ -2,6 +2,7 @@
 
 Default behavior:
     - Rebuild merged_volume_panel.csv from existing processed CSV files.
+    - Build research_panel.csv with realized and future returns.
 
 Optional behavior:
     - Use --fetch to refresh CEX and DEX data before rebuilding the panel.
@@ -17,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts import build_panel as build_panel_module
+from scripts import build_research_panel as build_research_panel_module
 from scripts import fetch_cex as fetch_cex_module
 from scripts import fetch_dex as fetch_dex_module
 
@@ -26,6 +28,7 @@ def run_pipeline(
     fetch_cex=None,
     fetch_dex=None,
     build_panel=None,
+    build_research_panel=None,
 ):
     """Run the data pipeline."""
     if fetch_cex is None:
@@ -37,6 +40,9 @@ def run_pipeline(
     if build_panel is None:
         build_panel = build_panel_module.main
 
+    if build_research_panel is None:
+        build_research_panel = build_research_panel_module.main
+
     if fetch:
         print("Refreshing CEX data")
         fetch_cex()
@@ -45,6 +51,8 @@ def run_pipeline(
 
     print("Building merged panel")
     build_panel()
+    print("Building research panel")
+    build_research_panel()
 
 
 def parse_args():

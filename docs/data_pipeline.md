@@ -12,6 +12,8 @@ config/tokens.csv
   -> merge CEX and DEX rows by date/token
   -> calculate basic volume metrics
   -> export merged_volume_panel.csv
+  -> calculate realized and future returns
+  -> export research_panel.csv
 ```
 
 ## DEX outputs
@@ -47,13 +49,33 @@ included_dexes
 included_pool_addresses
 ```
 
-## Next factor columns
+## Research panel
+
+`research_panel.csv` keeps the merged panel columns and adds return columns used
+for factor research.
 
 ```text
 return_1d
 future_return_1d
 future_return_3d
 future_return_7d
+```
+
+Calculation:
+
+```text
+return_1d = price_t / price_{t-1} - 1
+future_return_1d = price_{t+1} / price_t - 1
+future_return_3d = price_{t+3} / price_t - 1
+future_return_7d = price_{t+7} / price_t - 1
+```
+
+`future_return_*` columns use future prices, so they are labels for factor
+testing only. They should not be used as same-day factor inputs.
+
+## Next factor columns
+
+```text
 cex_vol_z_30d
 dex_vol_z_30d
 cex_volume_growth_7d
