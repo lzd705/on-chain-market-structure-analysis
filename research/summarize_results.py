@@ -50,6 +50,7 @@ def build_summary(research_dir: Path, figures_dir: Path) -> str:
     robustness = read_csv_if_exists(research_dir / "factor_robustness_checks.csv")
     confirmation = read_csv_if_exists(research_dir / "confirmation_forward_returns.csv")
     quality = read_csv_if_exists(research_dir / "data_quality_report.csv")
+    dex_structure = read_csv_if_exists(research_dir / "dex_structure_daily.csv")
 
     lines = [
         "# Research Findings Summary",
@@ -85,6 +86,21 @@ def build_summary(research_dir: Path, figures_dir: Path) -> str:
                 f"- Tokens flagged: {len(bad_rows)}",
                 f"- Total missing dates across tokens: {int(quality['missing_dates'].sum())}",
                 f"- Total duplicate token-date rows: {int(quality['duplicate_rows'].sum())}",
+                "",
+            ]
+        )
+
+    if not dex_structure.empty:
+        lines.extend(
+            [
+                "## DEX Direction And Pool Structure",
+                "",
+                "- DEX buy/sell metrics are OHLCV close-location proxies, not swap-level signed flow.",
+                f"- Median net buy ratio proxy: {pct(dex_structure['dex_net_buy_ratio_proxy'].median())}",
+                f"- Median top-pool volume share: {pct(dex_structure['top_pool_volume_share'].median())}",
+                f"- Median pool Herfindahl: {number(dex_structure['dex_pool_herfindahl'].median())}",
+                f"- Median active pool count: {number(dex_structure['active_pool_count'].median())}",
+                f"- Median DEX volume / pool TVL: {pct(dex_structure['dex_volume_to_tvl'].median())}",
                 "",
             ]
         )

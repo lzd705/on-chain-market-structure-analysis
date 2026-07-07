@@ -59,6 +59,26 @@ DEX_VOLUME_CONFIRMED_MOM_7D = MOM_7D * DEX_VOL_Z
 JOINT_VOLUME_CONFIRMED_MOM_7D = MOM_7D * JOINT_VOL_Z_MEAN
 ```
 
+在 A 侧提供 pool-level DEX OHLCV 后，研究层补充两类 DEX 结构因子。第一类是 OHLCV 方向性代理：
+
+```text
+DEX_NET_BUY_RATIO_PROXY = estimated_net_buy_volume / dex_pool_volume
+DEX_BUY_PRESSURE_PROXY_Z = rolling_z_score(DEX_NET_BUY_RATIO_PROXY, 30d)
+DEX_NET_BUY_CONFIRMED_MOM_7D = MOM_7D * DEX_BUY_PRESSURE_PROXY_Z
+```
+
+这些不是逐笔 Swap 方向，只是基于日 K close 在 high-low 区间位置估计的 buy / sell pressure proxy。后续拿到 swap-level 数据后，应替换为真实 `dex_buy_volume_usd`、`dex_sell_volume_usd` 和 `dex_net_buy_volume_usd`。
+
+第二类是池子结构和流动性代理：
+
+```text
+TOP_POOL_VOLUME_SHARE = largest_pool_volume / token_dex_volume
+DEX_POOL_HERFINDAHL = sum(pool_volume_share^2)
+DEX_POOL_DIVERSIFICATION = 1 - DEX_POOL_HERFINDAHL
+DEX_VOLUME_TO_TVL = token_dex_volume / summed_pool_tvl
+POOL_DIVERSIFIED_DEX_MOM_7D = DEX_VOLUME_CONFIRMED_MOM_7D * DEX_POOL_DIVERSIFICATION
+```
+
 成交量状态分为：
 
 ```text

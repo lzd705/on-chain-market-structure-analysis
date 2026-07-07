@@ -40,6 +40,26 @@ class ResearchFactorTests(unittest.TestCase):
             )
         return pd.DataFrame(rows)
 
+    def make_pool_daily(self, token_symbol: str = "AAA", days: int = 40) -> pd.DataFrame:
+        rows = []
+        for day in range(days):
+            date = pd.Timestamp("2026-01-01") + pd.Timedelta(days=day)
+            for pool_index, pool_share in enumerate([0.7, 0.3], start=1):
+                rows.append(
+                    {
+                        "date": date,
+                        "token_symbol": token_symbol,
+                        "pool_address": f"pool_{pool_index}",
+                        "open": 10 + day,
+                        "high": 12 + day,
+                        "low": 9 + day,
+                        "close": 11 + day if pool_index == 1 else 10 + day,
+                        "dex_volume_usd": 100_000 * pool_share,
+                        "pool_tvl_usd": 1_000_000 * pool_share,
+                    }
+                )
+        return pd.DataFrame(rows)
+
     def test_add_factors_creates_expected_columns(self) -> None:
         panel = self.make_panel()
         result = run_research.add_factors(panel, drop_last_date=False)
@@ -69,6 +89,14 @@ class ResearchFactorTests(unittest.TestCase):
         self.assertIn("dex_volume_confirmed_mom_7d", result.columns)
         self.assertIn("joint_volume_confirmed_mom_7d", result.columns)
         self.assertIn("dex_share_confirmed_mom_7d", result.columns)
+        self.assertIn("dex_net_buy_ratio_proxy", result.columns)
+        self.assertIn("dex_buy_pressure_proxy_z", result.columns)
+        self.assertIn("dex_net_buy_confirmed_mom_7d", result.columns)
+        self.assertIn("top_pool_volume_share", result.columns)
+        self.assertIn("dex_pool_herfindahl", result.columns)
+        self.assertIn("dex_pool_diversification", result.columns)
+        self.assertIn("dex_volume_to_tvl_z", result.columns)
+        self.assertIn("pool_diversified_dex_mom_7d", result.columns)
         self.assertIn("dex_share", result.columns)
         self.assertIn("future_return_7d", result.columns)
         self.assertIn("future_return_14d", result.columns)
@@ -77,6 +105,20 @@ class ResearchFactorTests(unittest.TestCase):
         self.assertGreater(result["mom_7d"].notna().sum(), 0)
         self.assertGreater(result["cex_vol_growth_7d"].notna().sum(), 0)
         self.assertGreater(result["joint_vol_z_mean"].notna().sum(), 0)
+
+    def test_dex_pool_features_create_direction_and_concentration_metrics(self) -> None:
+        pool_daily = self.make_pool_daily()
+        features = run_research.calculate_dex_pool_features(pool_daily)
+
+        self.assertIn("dex_buy_volume_proxy_usd", features.columns)
+        self.assertIn("dex_sell_volume_proxy_usd", features.columns)
+        self.assertIn("dex_net_buy_ratio_proxy", features.columns)
+        self.assertIn("top_pool_volume_share", features.columns)
+        self.assertIn("dex_pool_herfindahl", features.columns)
+        self.assertIn("dex_volume_to_tvl", features.columns)
+        self.assertAlmostEqual(features.loc[0, "top_pool_volume_share"], 0.7)
+        self.assertAlmostEqual(features.loc[0, "dex_pool_herfindahl"], 0.58)
+        self.assertGreater(features.loc[0, "dex_net_buy_ratio_proxy"], 0)
 
     def test_short_tokens_are_filtered(self) -> None:
         long_panel = self.make_panel("LONG", 40)
