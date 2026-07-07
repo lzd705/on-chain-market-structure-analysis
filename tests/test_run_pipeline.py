@@ -46,7 +46,7 @@ class RunPipelineTests(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("Wrote 1800 merged rows", result.stdout)
+        self.assertIn("merged rows to data/processed/merged_volume_panel.csv", result.stdout)
 
 
 if __name__ == "__main__":
