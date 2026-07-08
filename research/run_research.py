@@ -18,6 +18,7 @@ FIGURES_DIR = PROJECT_ROOT / "figures"
 TIME_SERIES_DIR = FIGURES_DIR / "time_series"
 
 MERGED_PANEL_PATH = INPUT_DIR / "merged_volume_panel.csv"
+RESEARCH_PANEL_INPUT_PATH = INPUT_DIR / "research_panel.csv"
 CEX_DAILY_PATH = INPUT_DIR / "cex_volume_daily.csv"
 DEX_DAILY_PATH = INPUT_DIR / "dex_volume_daily.csv"
 DEX_POOL_DAILY_PATH = INPUT_DIR / "dex_pool_volume_daily.csv"
@@ -116,7 +117,7 @@ def resolve_path(path_text: str) -> Path:
 def configure_paths(input_dir: Path, research_dir: Path, figures_dir: Path) -> None:
     """Configure input and output paths for one research run."""
     global INPUT_DIR, RESEARCH_DIR, FIGURES_DIR, TIME_SERIES_DIR
-    global MERGED_PANEL_PATH, CEX_DAILY_PATH, DEX_DAILY_PATH, DEX_POOL_DAILY_PATH
+    global MERGED_PANEL_PATH, RESEARCH_PANEL_INPUT_PATH, CEX_DAILY_PATH, DEX_DAILY_PATH, DEX_POOL_DAILY_PATH
     global FACTOR_PANEL_PATH, COVERAGE_SUMMARY_PATH, CEX_DEX_CORRELATION_PATH
     global LEAD_LAG_CORRELATION_PATH, FACTOR_FORWARD_RETURNS_PATH
     global CONFIRMATION_FORWARD_RETURNS_PATH, DATA_QUALITY_REPORT_PATH
@@ -128,6 +129,7 @@ def configure_paths(input_dir: Path, research_dir: Path, figures_dir: Path) -> N
     TIME_SERIES_DIR = FIGURES_DIR / "time_series"
 
     MERGED_PANEL_PATH = INPUT_DIR / "merged_volume_panel.csv"
+    RESEARCH_PANEL_INPUT_PATH = INPUT_DIR / "research_panel.csv"
     CEX_DAILY_PATH = INPUT_DIR / "cex_volume_daily.csv"
     DEX_DAILY_PATH = INPUT_DIR / "dex_volume_daily.csv"
     DEX_POOL_DAILY_PATH = INPUT_DIR / "dex_pool_volume_daily.csv"
@@ -153,6 +155,9 @@ def ensure_output_dirs() -> None:
 
 def has_research_input() -> bool:
     """Return whether any usable A-side input data is present."""
+    if RESEARCH_PANEL_INPUT_PATH.exists():
+        return True
+
     if MERGED_PANEL_PATH.exists():
         return True
 
@@ -208,6 +213,10 @@ def standardize_core_columns(panel: pd.DataFrame) -> pd.DataFrame:
 
 def load_panel() -> pd.DataFrame:
     """Load the final panel or build one from intermediate CEX and DEX files."""
+    if RESEARCH_PANEL_INPUT_PATH.exists():
+        panel = pd.read_csv(RESEARCH_PANEL_INPUT_PATH)
+        return merge_dex_pool_features(panel)
+
     if MERGED_PANEL_PATH.exists():
         panel = pd.read_csv(MERGED_PANEL_PATH)
         return merge_dex_pool_features(panel)
@@ -215,7 +224,7 @@ def load_panel() -> pd.DataFrame:
     if not CEX_DAILY_PATH.exists() or not DEX_DAILY_PATH.exists():
         missing_paths = [
             str(path.relative_to(PROJECT_ROOT))
-            for path in [MERGED_PANEL_PATH, CEX_DAILY_PATH, DEX_DAILY_PATH]
+            for path in [RESEARCH_PANEL_INPUT_PATH, MERGED_PANEL_PATH, CEX_DAILY_PATH, DEX_DAILY_PATH]
             if not path.exists()
         ]
         raise FileNotFoundError(
@@ -990,7 +999,7 @@ def run(
     if not has_research_input() and allow_missing:
         missing_paths = [
             str(path.relative_to(PROJECT_ROOT))
-            for path in [MERGED_PANEL_PATH, CEX_DAILY_PATH, DEX_DAILY_PATH]
+            for path in [RESEARCH_PANEL_INPUT_PATH, MERGED_PANEL_PATH, CEX_DAILY_PATH, DEX_DAILY_PATH]
             if not path.exists()
         ]
         print("No research input data found. Missing: " + ", ".join(missing_paths))

@@ -120,6 +120,20 @@ class ResearchFactorTests(unittest.TestCase):
         self.assertAlmostEqual(features.loc[0, "dex_pool_herfindahl"], 0.58)
         self.assertGreater(features.loc[0, "dex_net_buy_ratio_proxy"], 0)
 
+    def test_load_panel_prefers_a_side_research_panel(self) -> None:
+        processed_dir = run_research.INPUT_DIR
+        processed_dir.mkdir(parents=True, exist_ok=True)
+        merged_panel = self.make_panel("MERGED", 3)
+        research_panel = self.make_panel("RESEARCH", 4)
+
+        merged_panel.to_csv(processed_dir / "merged_volume_panel.csv", index=False)
+        research_panel.to_csv(processed_dir / "research_panel.csv", index=False)
+
+        loaded = run_research.load_panel()
+
+        self.assertEqual(set(loaded["token_symbol"]), {"RESEARCH"})
+        self.assertEqual(len(loaded), 4)
+
     def test_short_tokens_are_filtered(self) -> None:
         long_panel = self.make_panel("LONG", 40)
         short_panel = self.make_panel("SHORT", 12)
