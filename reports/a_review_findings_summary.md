@@ -18,8 +18,8 @@ This summary is generated from the selected research CSV outputs. If the inputs 
 
 ## DEX Direction And Pool Structure
 
-- DEX buy/sell metrics are OHLCV close-location proxies, not swap-level signed flow.
-- Median net buy ratio proxy: -17.77%
+- DEX buy/sell/net-buy metrics are empty because current inputs do not include swap-level trade direction.
+- Median net buy ratio: n/a
 - Median top-pool volume share: 67.15%
 - Median pool Herfindahl: 0.51
 - Median active pool count: 5.00
@@ -50,9 +50,6 @@ This summary is generated from the selected research CSV outputs. If the inputs 
 - cex_dex_z_product: high-minus-low 7d mean spread -0.44% (low -1.51%, high -1.96%)
 - cex_vol_growth_7d: high-minus-low 7d mean spread 0.78% (low -2.75%, high -1.98%)
 - cex_volume_confirmed_mom_7d: high-minus-low 7d mean spread 1.88% (low -4.33%, high -2.45%)
-- dex_buy_pressure_proxy_z: high-minus-low 7d mean spread -1.83% (low -1.43%, high -3.26%)
-- dex_net_buy_confirmed_mom_7d: high-minus-low 7d mean spread 0.95% (low -3.54%, high -2.59%)
-- dex_net_buy_ratio_proxy: high-minus-low 7d mean spread -0.70% (low -2.64%, high -3.34%)
 - dex_pool_concentration_change_7d: high-minus-low 7d mean spread 0.97% (low -3.22%, high -2.25%)
 - dex_pool_diversification: high-minus-low 7d mean spread 0.86% (low -2.18%, high -1.32%)
 - dex_pool_herfindahl: high-minus-low 7d mean spread -0.86% (low -1.32%, high -2.18%)
@@ -86,8 +83,8 @@ This summary is generated from the selected research CSV outputs. If the inputs 
 - joint_volume_confirmed_mom_7d: overall spread 1.95%, excluding PEPE+ARB 1.63%, change -0.32%
 - volume_growth_divergence_7d: overall spread 1.23%, excluding PEPE+ARB 1.24%, change 0.01%
 - dex_volume_confirmed_mom_7d: overall spread 1.20%, excluding PEPE+ARB 0.83%, change -0.37%
-- dex_net_buy_confirmed_mom_7d: overall spread 0.95%, excluding PEPE+ARB 0.46%, change -0.49%
 - pool_diversified_dex_mom_7d: overall spread 0.55%, excluding PEPE+ARB 0.40%, change -0.15%
+- mom_14d: overall spread 0.42%, excluding PEPE+ARB 0.22%, change -0.21%
 
 Strongest token-group spreads:
 - layer2 / mom_30d: 5.31%, n=282

@@ -79,9 +79,6 @@ CANDIDATE_FACTOR_NAMES = [
     "dex_volume_confirmed_mom_7d",
     "joint_volume_confirmed_mom_7d",
     "dex_share_confirmed_mom_7d",
-    "dex_net_buy_ratio_proxy",
-    "dex_buy_pressure_proxy_z",
-    "dex_net_buy_confirmed_mom_7d",
     "top_pool_volume_share",
     "dex_pool_herfindahl",
     "dex_pool_diversification",
@@ -100,7 +97,6 @@ ROBUSTNESS_FACTOR_NAMES = [
     "mom_14d",
     "mom_30d",
     "total_vol_z",
-    "dex_net_buy_confirmed_mom_7d",
     "pool_diversified_dex_mom_7d",
     "dex_volume_to_tvl_z",
 ]
@@ -267,10 +263,10 @@ def load_panel() -> pd.DataFrame:
 
 
 def calculate_dex_pool_features(pool_daily: pd.DataFrame) -> pd.DataFrame:
-    """Build daily DEX direction proxies and pool concentration metrics.
+    """Build daily DEX pool concentration and liquidity metrics.
 
     The input is daily pool OHLCV, not swap-level data. Directional buy/sell
-    columns are therefore OHLCV-based pressure proxies, not true trade signs.
+    columns are kept empty because they require signed swap-level flow.
     """
     required = {"date", "token_symbol", "pool_address", "open", "high", "low", "close", "dex_volume_usd"}
     missing = sorted(required - set(pool_daily.columns))
@@ -292,12 +288,6 @@ def calculate_dex_pool_features(pool_daily: pd.DataFrame) -> pd.DataFrame:
         pool_daily["pool_tvl_usd"] = pd.NA
 
     pool_daily["dex_volume_usd"] = pool_daily["dex_volume_usd"].fillna(0.0).clip(lower=0)
-    price_range = pool_daily["high"] - pool_daily["low"]
-    close_location = (pool_daily["close"] - pool_daily["low"]) / price_range.replace(0, pd.NA)
-    pool_daily["buy_pressure_proxy"] = close_location.fillna(0.5).clip(lower=0.0, upper=1.0)
-    pool_daily["dex_buy_volume_proxy_usd"] = pool_daily["dex_volume_usd"] * pool_daily["buy_pressure_proxy"]
-    pool_daily["dex_sell_volume_proxy_usd"] = pool_daily["dex_volume_usd"] * (1.0 - pool_daily["buy_pressure_proxy"])
-
     group_keys = ["date", "token_symbol"]
     pool_daily["pool_volume_total"] = pool_daily.groupby(group_keys)["dex_volume_usd"].transform("sum")
     pool_daily["pool_volume_share"] = pool_daily["dex_volume_usd"] / pool_daily["pool_volume_total"].replace(0, pd.NA)
@@ -308,8 +298,6 @@ def calculate_dex_pool_features(pool_daily: pd.DataFrame) -> pd.DataFrame:
         pool_daily.groupby(group_keys, as_index=False)
         .agg(
             dex_pool_volume_sum=("dex_volume_usd", "sum"),
-            dex_buy_volume_proxy_usd=("dex_buy_volume_proxy_usd", "sum"),
-            dex_sell_volume_proxy_usd=("dex_sell_volume_proxy_usd", "sum"),
             active_pool_count=("pool_address", "nunique"),
             top_pool_volume_usd=("dex_volume_usd", "max"),
             top_pool_volume_share=("pool_volume_share", "max"),
@@ -319,19 +307,16 @@ def calculate_dex_pool_features(pool_daily: pd.DataFrame) -> pd.DataFrame:
         )
     )
 
-    features["dex_net_buy_volume_proxy_usd"] = (
-        features["dex_buy_volume_proxy_usd"] - features["dex_sell_volume_proxy_usd"]
-    )
-    features["dex_net_buy_ratio_proxy"] = (
-        features["dex_net_buy_volume_proxy_usd"]
-        / features["dex_pool_volume_sum"].replace(0, pd.NA)
-    )
+    features["dex_buy_volume_usd"] = pd.NA
+    features["dex_sell_volume_usd"] = pd.NA
+    features["dex_net_buy_volume_usd"] = pd.NA
+    features["dex_net_buy_ratio"] = pd.NA
     features["dex_volume_to_tvl"] = (
         features["dex_pool_volume_sum"]
         / features["dex_pool_tvl_usd"].replace(0, pd.NA)
     )
     features["dex_pool_diversification"] = 1.0 - features["dex_pool_herfindahl"]
-    features["dex_direction_proxy_method"] = "ohlcv_close_location"
+    features["dex_direction_data_status"] = "unavailable_without_swap_level_data"
 
     return features
 
@@ -444,10 +429,10 @@ def add_factors(panel: pd.DataFrame, drop_last_date: bool = True) -> pd.DataFram
     panel["cex_volume_usd"] = panel["cex_volume_usd"].fillna(0.0)
     panel["dex_volume_usd"] = panel["dex_volume_usd"].fillna(0.0)
     optional_numeric_columns = [
-        "dex_buy_volume_proxy_usd",
-        "dex_sell_volume_proxy_usd",
-        "dex_net_buy_volume_proxy_usd",
-        "dex_net_buy_ratio_proxy",
+        "dex_buy_volume_usd",
+        "dex_sell_volume_usd",
+        "dex_net_buy_volume_usd",
+        "dex_net_buy_ratio",
         "active_pool_count",
         "top_pool_volume_usd",
         "top_pool_volume_share",
@@ -491,7 +476,6 @@ def add_factors(panel: pd.DataFrame, drop_last_date: bool = True) -> pd.DataFram
     panel["total_vol_z"] = grouped["log_total_volume"].transform(rolling_z_score)
     panel["cex_dex_ratio_z"] = grouped["log_cex_dex_ratio"].transform(rolling_z_score)
     panel["dex_share_z"] = grouped["dex_share"].transform(rolling_z_score)
-    panel["dex_buy_pressure_proxy_z"] = grouped["dex_net_buy_ratio_proxy"].transform(rolling_z_score)
     panel["dex_volume_to_tvl_z"] = grouped["log_dex_volume_to_tvl"].transform(rolling_z_score)
     panel["cex_vol_growth_7d"] = grouped["cex_volume_usd"].transform(rolling_volume_growth)
     panel["dex_vol_growth_7d"] = grouped["dex_volume_usd"].transform(rolling_volume_growth)
@@ -510,7 +494,6 @@ def add_factors(panel: pd.DataFrame, drop_last_date: bool = True) -> pd.DataFram
     panel["dex_volume_confirmed_mom_7d"] = panel["mom_7d"] * panel["dex_vol_z"]
     panel["joint_volume_confirmed_mom_7d"] = panel["mom_7d"] * panel["joint_vol_z_mean"]
     panel["dex_share_confirmed_mom_7d"] = panel["mom_7d"] * panel["dex_share_z"]
-    panel["dex_net_buy_confirmed_mom_7d"] = panel["mom_7d"] * panel["dex_buy_pressure_proxy_z"]
     panel["pool_diversified_dex_mom_7d"] = (
         panel["dex_volume_confirmed_mom_7d"] * panel["dex_pool_diversification"]
     )
@@ -555,7 +538,6 @@ def write_coverage_summary(panel: pd.DataFrame) -> None:
         "missing_price": ("price_usd", lambda values: values.isna().sum()),
     }
     optional_summary_columns = {
-        "dex_net_buy_ratio_proxy_median": "dex_net_buy_ratio_proxy",
         "top_pool_volume_share_median": "top_pool_volume_share",
         "dex_pool_herfindahl_median": "dex_pool_herfindahl",
         "dex_volume_to_tvl_median": "dex_volume_to_tvl",
@@ -570,15 +552,15 @@ def write_coverage_summary(panel: pd.DataFrame) -> None:
 
 
 def write_dex_structure_daily(panel: pd.DataFrame) -> None:
-    """Write DEX direction proxy, pool concentration, and liquidity proxy columns."""
+    """Write DEX direction placeholders, pool concentration, and liquidity columns."""
     columns = [
         "date",
         "token_symbol",
         "dex_volume_usd",
-        "dex_buy_volume_proxy_usd",
-        "dex_sell_volume_proxy_usd",
-        "dex_net_buy_volume_proxy_usd",
-        "dex_net_buy_ratio_proxy",
+        "dex_buy_volume_usd",
+        "dex_sell_volume_usd",
+        "dex_net_buy_volume_usd",
+        "dex_net_buy_ratio",
         "active_pool_count",
         "top_pool_volume_usd",
         "top_pool_volume_share",
@@ -587,7 +569,7 @@ def write_dex_structure_daily(panel: pd.DataFrame) -> None:
         "dex_pool_tvl_usd",
         "top_pool_tvl_share",
         "dex_volume_to_tvl",
-        "dex_direction_proxy_method",
+        "dex_direction_data_status",
     ]
     available_columns = [column for column in columns if column in panel.columns]
     if not {"date", "token_symbol"}.issubset(available_columns):

@@ -91,12 +91,13 @@ def build_summary(research_dir: Path, figures_dir: Path) -> str:
         )
 
     if not dex_structure.empty:
+        has_signed_flow = "dex_net_buy_ratio" in dex_structure.columns and dex_structure["dex_net_buy_ratio"].notna().any()
         lines.extend(
             [
                 "## DEX Direction And Pool Structure",
                 "",
-                "- DEX buy/sell metrics are OHLCV close-location proxies, not swap-level signed flow.",
-                f"- Median net buy ratio proxy: {pct(dex_structure['dex_net_buy_ratio_proxy'].median())}",
+                "- DEX buy/sell/net-buy metrics are empty because current inputs do not include swap-level trade direction.",
+                f"- Median net buy ratio: {pct(dex_structure['dex_net_buy_ratio'].median()) if has_signed_flow else 'n/a'}",
                 f"- Median top-pool volume share: {pct(dex_structure['top_pool_volume_share'].median())}",
                 f"- Median pool Herfindahl: {number(dex_structure['dex_pool_herfindahl'].median())}",
                 f"- Median active pool count: {number(dex_structure['active_pool_count'].median())}",

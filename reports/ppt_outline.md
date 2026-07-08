@@ -32,7 +32,6 @@ CEX 与 DEX 成交量关系及动量因子研究
 - DEX_SHARE_Z / DEX_SHARE_CHANGE_7D
 - JOINT_VOL_Z_MEAN / CEX_DEX_Z_PRODUCT
 - CEX_VOLUME_CONFIRMED_MOM_7D / DEX_VOLUME_CONFIRMED_MOM_7D
-- DEX_NET_BUY_RATIO_PROXY / DEX_NET_BUY_CONFIRMED_MOM_7D
 - TOP_POOL_VOLUME_SHARE / DEX_POOL_HERFINDAHL / DEX_VOLUME_TO_TVL
 
 ## Slide 5: Data Coverage
@@ -111,7 +110,7 @@ Message:
 ## Slide 13: Limitations and Next Steps
 
 - Short sample and limited DEX/CEX coverage.
-- DEX buy/sell is currently an OHLCV pressure proxy, not swap-level signed flow.
+- DEX buy/sell/net-buy fields are blank until swap-level signed flow is available.
 - Daily frequency cannot prove intraday causality.
 - Add events, wallet-level DEX behavior, and robustness tests next.
 

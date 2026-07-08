@@ -89,9 +89,7 @@ class ResearchFactorTests(unittest.TestCase):
         self.assertIn("dex_volume_confirmed_mom_7d", result.columns)
         self.assertIn("joint_volume_confirmed_mom_7d", result.columns)
         self.assertIn("dex_share_confirmed_mom_7d", result.columns)
-        self.assertIn("dex_net_buy_ratio_proxy", result.columns)
-        self.assertIn("dex_buy_pressure_proxy_z", result.columns)
-        self.assertIn("dex_net_buy_confirmed_mom_7d", result.columns)
+        self.assertIn("dex_net_buy_ratio", result.columns)
         self.assertIn("top_pool_volume_share", result.columns)
         self.assertIn("dex_pool_herfindahl", result.columns)
         self.assertIn("dex_pool_diversification", result.columns)
@@ -106,19 +104,23 @@ class ResearchFactorTests(unittest.TestCase):
         self.assertGreater(result["cex_vol_growth_7d"].notna().sum(), 0)
         self.assertGreater(result["joint_vol_z_mean"].notna().sum(), 0)
 
-    def test_dex_pool_features_create_direction_and_concentration_metrics(self) -> None:
+    def test_dex_pool_features_create_empty_direction_and_concentration_metrics(self) -> None:
         pool_daily = self.make_pool_daily()
         features = run_research.calculate_dex_pool_features(pool_daily)
 
-        self.assertIn("dex_buy_volume_proxy_usd", features.columns)
-        self.assertIn("dex_sell_volume_proxy_usd", features.columns)
-        self.assertIn("dex_net_buy_ratio_proxy", features.columns)
+        self.assertIn("dex_buy_volume_usd", features.columns)
+        self.assertIn("dex_sell_volume_usd", features.columns)
+        self.assertIn("dex_net_buy_ratio", features.columns)
         self.assertIn("top_pool_volume_share", features.columns)
         self.assertIn("dex_pool_herfindahl", features.columns)
         self.assertIn("dex_volume_to_tvl", features.columns)
         self.assertAlmostEqual(features.loc[0, "top_pool_volume_share"], 0.7)
         self.assertAlmostEqual(features.loc[0, "dex_pool_herfindahl"], 0.58)
-        self.assertGreater(features.loc[0, "dex_net_buy_ratio_proxy"], 0)
+        self.assertTrue(features["dex_net_buy_ratio"].isna().all())
+        self.assertEqual(
+            set(features["dex_direction_data_status"]),
+            {"unavailable_without_swap_level_data"},
+        )
 
     def test_load_panel_prefers_a_side_research_panel(self) -> None:
         processed_dir = run_research.INPUT_DIR
