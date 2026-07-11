@@ -18,6 +18,25 @@ The project should focus on 9 core tasks:
 
 The final output should be a structured market structure report based on on-chain facts, quantitative metrics, and clearly stated limitations.
 
+## Local Research Dashboard
+
+The interactive CEX / DEX comparison dashboard lives in `dashboard/`. It reads the latest local research panel, compares metrics and candidate factors, exports filtered data, and persists research notes and checklist status locally.
+
+```bash
+./scripts/run_dashboard.sh
+```
+
+Open `http://127.0.0.1:8765` after startup.
+
+Use the versioned synthetic sample for a redistribution-safe public demo:
+
+```bash
+./scripts/run_dashboard.sh --data data/mock/research/factor_panel.csv
+```
+
+Project source code is MIT licensed. See `DATA_USAGE.md` before redistributing
+observed or derived market data.
+
 ---
 
 ## Task 1: Confirm Token Metadata and Contract Risk Flags

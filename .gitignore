@@ -2,3 +2,5 @@
 __pycache__/
 *.py[cod]
 .matplotlib-cache/
+dashboard/node_modules/
+dashboard/state/work_status.local.json
