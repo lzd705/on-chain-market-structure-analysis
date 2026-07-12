@@ -6,6 +6,7 @@
   "scripts": {
     "start": "python3 server.py",
     "start:sample": "python3 server.py --data ../data/mock/research/factor_panel.csv",
+    "start:public": "python3 server.py --public --host 0.0.0.0",
     "test": "cd .. && python3 -m unittest discover -s tests -p 'test_dashboard.py'"
   },
   "dependencies": {

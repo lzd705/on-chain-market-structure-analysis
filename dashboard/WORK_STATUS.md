@@ -13,9 +13,14 @@ Updated: 2026-07-11
 - Local JSON persistence for filters, notes, and research checklist.
 - Filtered CSV export.
 - Reproducible refresh and startup scripts.
-- Versioned five-token synthetic sample for public demos.
+- Versioned five-token synthetic sample retained for tests and demos.
 - MIT source license and explicit third-party data usage boundary.
 - Desktop and mobile release screenshot.
+- Append-only local workspace history with data fingerprints.
+- Private workspace and public read-only runtime modes.
+- Curated 10-token, 30-factor public research snapshot with a manifest.
+- Non-root Docker image that excludes private state and review directories.
+- GitHub CI and Render Blueprint for checked automatic deployment.
 
 ## Data Status
 
@@ -29,4 +34,4 @@ Updated: 2026-07-11
 
 - Cross-check token-level DEX totals against DefiLlama or Dune.
 - Add event-study and swap-level views when those datasets become available.
-- Select a public hosting destination if a continuously available web version is required.
+- Authorize the GitHub repository in Render and verify the permanent HTTPS URL.

@@ -1,0 +1,12 @@
+.git
+.DS_Store
+__pycache__
+*.pyc
+.matplotlib-cache
+dashboard/node_modules
+dashboard/state/work_status.local.json
+dashboard/state/work_history.local.jsonl
+data/a_review
+data/processed
+data/research
+figures

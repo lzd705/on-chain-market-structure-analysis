@@ -1,0 +1,49 @@
+name: Dashboard CI
+
+on:
+  push:
+    paths:
+      - "dashboard/**"
+      - "data/public/**"
+      - "scripts/build_public_snapshot.py"
+      - "tests/**"
+      - "Dockerfile"
+      - "render.yaml"
+      - ".github/workflows/dashboard-ci.yml"
+  pull_request:
+    paths:
+      - "dashboard/**"
+      - "data/public/**"
+      - "scripts/build_public_snapshot.py"
+      - "tests/**"
+      - "Dockerfile"
+      - "render.yaml"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - name: Install browser dependencies
+        working-directory: dashboard
+        run: npm ci
+      - name: Verify public snapshot is current
+        run: |
+          python3 scripts/build_public_snapshot.py
+          git diff --exit-code -- data/public
+      - name: Run Python tests
+        run: python3 -m unittest discover -s tests
+      - name: Check browser JavaScript
+        run: node --check dashboard/static/app.js
+      - name: Check shell scripts
+        run: bash -n scripts/run_dashboard.sh scripts/run_public_dashboard.sh scripts/share_public_dashboard.sh

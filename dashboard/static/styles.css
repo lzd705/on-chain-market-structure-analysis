@@ -21,6 +21,7 @@
 }
 
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { margin: 0; min-width: 320px; background: var(--bg); }
 button, input, select, textarea { font: inherit; letter-spacing: 0; }
 button, select, input[type="checkbox"] { cursor: pointer; }
@@ -64,6 +65,7 @@ select, input[type="date"] { width: 100%; min-height: 38px; padding: 8px 10px; b
 .button-primary { background: #e8a64d; color: #18232d; }
 .button-secondary { background: transparent; color: #e6ebee; border-color: #52616c; }
 .save-status { margin-top: 10px; min-height: 16px; color: var(--sidebar-muted); font-size: 10px; line-height: 1.5; }
+.public-status { margin-top: 10px; padding: 9px; border: 1px solid #52616c; border-radius: 5px; color: #dbe1e6; font-size: 10px; line-height: 1.5; }
 
 .main-content { min-width: 0; padding: 0 28px 48px; }
 .topbar { min-height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 24px; border-bottom: 1px solid var(--line); }
@@ -125,6 +127,14 @@ td { padding: 10px 8px; border-bottom: 1px solid #edf0f2; text-align: right; fon
 .status-cell { min-height: 82px; padding: 12px; background: var(--surface-muted); border-radius: 5px; }
 .status-cell span { color: var(--muted); font-size: 10px; }
 .status-cell strong { display: block; margin-top: 7px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; overflow-wrap: anywhere; }
+.history-list { display: grid; gap: 7px; }
+.history-item { display: grid; grid-template-columns: 160px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 11px 12px; border: 1px solid var(--line); border-radius: 5px; }
+.history-time { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; }
+.history-main { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.history-main strong { font-size: 12px; }
+.history-main span { min-width: 0; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.history-meta { display: flex; gap: 12px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; white-space: nowrap; }
+.history-empty { padding: 16px; background: var(--surface-muted); border-radius: 5px; color: var(--muted); font-size: 11px; }
 
 @media (max-width: 1100px) {
   .app-shell { grid-template-columns: 230px minmax(0, 1fr); }
@@ -150,6 +160,8 @@ td { padding: 10px 8px; border-bottom: 1px solid #edf0f2; text-align: right; fon
   .factor-controls { align-items: stretch; flex-direction: column; }
   .factor-controls label { min-width: 0; }
   .data-status-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .history-item { grid-template-columns: 1fr; gap: 6px; }
+  .history-meta { flex-wrap: wrap; }
 }
 
 @media (max-width: 470px) {

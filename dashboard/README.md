@@ -20,7 +20,9 @@ The server reads the richest available panel in this order:
 4. `data/processed/research_panel.csv`
 5. `data/processed/merged_volume_panel.csv`
 
-Filters, notes, and checklist status are saved to `dashboard/state/work_status.local.json`. The file is intentionally ignored by Git; `work_status.example.json` is the source-controlled initial state.
+Filters, notes, and checklist status are saved to `dashboard/state/work_status.local.json`. Each save is also appended to `dashboard/state/work_history.local.jsonl` with the active data fingerprint and task progress. Both local files are ignored by Git; `work_status.example.json` is the source-controlled initial state.
+
+![Private workspace history](assets/dashboard-history.png)
 
 ## Main views
 
@@ -41,6 +43,26 @@ data:
 
 See `dashboard/sample/manifest.json` and `DATA_USAGE.md` for provenance and
 licensing boundaries.
+
+For a shareable read-only process, use:
+
+```bash
+./scripts/run_public_dashboard.sh --port 8766
+```
+
+See `dashboard/PUBLIC_SHARING.md` for LAN and Docker deployment options. Public
+mode is enforced by the backend: it uses the curated 10-token snapshot under
+`data/public/`, hides private tools, and rejects state writes. The Docker image
+does not contain the private workspace or the source review directory.
+
+For a temporary public HTTPS link, run `./scripts/share_public_dashboard.sh`.
+
+## Routine update
+
+After the research panel changes, run `make release` to rebuild the curated
+public snapshot and execute the test suite. Review the result, commit it, and
+push it; the Render Blueprint waits for GitHub checks before deploying the new
+container.
 
 ## Refresh observed data
 

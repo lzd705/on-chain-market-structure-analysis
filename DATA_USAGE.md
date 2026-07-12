@@ -24,6 +24,19 @@ data. A public release should include either:
 - synthetic sample data from `data/mock/`; or
 - fresh data fetched by the user from the configured upstream APIs.
 
+## Curated public snapshot
+
+Files under `data/public/` are a derived, field-limited research snapshot built
+from the reviewed B-side panel. They contain aggregate token-day observations
+and factor results for the ten dashboard tokens, but omit pool addresses,
+exchange lists, private workspace state, and unsupported directional fields.
+
+The snapshot is included so the public dashboard is reproducible; it does not
+change the upstream providers' terms. Before refreshing or redistributing it,
+the project owner must review the current terms and attribution requirements of
+the configured sources. The exact source commit, dates, row count, and content
+hashes are recorded in `data/public/research/manifest.json`.
+
 ## Analytical limitations
 
 - `Observed DEX Share` compares only the CEX exchanges and DEX pools captured

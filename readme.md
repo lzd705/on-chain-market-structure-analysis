@@ -28,11 +28,21 @@ The interactive CEX / DEX comparison dashboard lives in `dashboard/`. It reads t
 
 Open `http://127.0.0.1:8765` after startup.
 
-Use the versioned synthetic sample for a redistribution-safe public demo:
+Run the private research workspace locally:
 
 ```bash
-./scripts/run_dashboard.sh --data data/mock/research/factor_panel.csv
+make dashboard
 ```
+
+Run the curated 10-token public read-only site on port 8766:
+
+```bash
+make public
+```
+
+After research data changes, `make release` rebuilds the public snapshot and
+runs all checks. See `dashboard/PUBLIC_SHARING.md` for the Render deployment
+model and `data/public/research/manifest.json` for the published data version.
 
 Project source code is MIT licensed. See `DATA_USAGE.md` before redistributing
 observed or derived market data.

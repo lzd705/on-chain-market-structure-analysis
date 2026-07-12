@@ -3,6 +3,7 @@ const palette = ["#0f7c82", "#356fb6", "#c76d1d", "#aa4d64", "#477a59", "#6b5b95
 const app = {
   payload: null,
   state: null,
+  history: [],
   charts: {},
   factorHorizon: "7d",
 };
@@ -88,8 +89,15 @@ function renderTokens() {
 }
 
 function renderMetricOptions() {
-  byId("metric-select").innerHTML = Object.entries(app.payload.metrics)
-    .map(([key, metric]) => `<option value="${key}">${metric.label}</option>`).join("");
+  const grouped = Object.entries(app.payload.metrics).reduce((groups, [key, metric]) => {
+    const category = metric.category || "其他";
+    if (!groups[category]) groups[category] = [];
+    groups[category].push([key, metric]);
+    return groups;
+  }, {});
+  byId("metric-select").innerHTML = Object.entries(grouped).map(([category, metrics]) =>
+    `<optgroup label="${category}">${metrics.map(([key, metric]) => `<option value="${key}">${metric.label}</option>`).join("")}</optgroup>`
+  ).join("");
   const stateMetric = app.state.metric;
   byId("metric-select").value = app.payload.metrics[stateMetric] ? stateMetric : "dex_share";
 }
@@ -280,9 +288,24 @@ function renderWorkspace() {
   const status = [
     ["数据源", meta.source_path], ["粒度", meta.grain], ["样本行数", compact.format(meta.row_count)], ["Token", meta.token_count],
     ["日期范围", `${meta.start_date} — ${meta.end_date}`], ["CEX 完整率", percent.format(meta.cex_completeness)],
-    ["DEX 完整率", percent.format(meta.dex_completeness)], ["口径", "Observed sources"],
+    ["DEX 完整率", percent.format(meta.dex_completeness)], ["数据版本", meta.data_version],
   ];
   byId("data-status-grid").innerHTML = status.map(([label, value]) => `<div class="status-cell"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  renderHistory();
+}
+
+function renderHistory() {
+  const history = app.history || [];
+  byId("history-list").innerHTML = history.length ? history.map((entry) => {
+    const workspace = entry.workspace || {};
+    const data = entry.data || {};
+    const tokens = (workspace.selected_tokens || []).join(", ") || "未选择";
+    return `<div class="history-item">
+      <div class="history-time">${new Date(entry.saved_at).toLocaleString("zh-CN")}</div>
+      <div class="history-main"><strong>${workspace.metric || "N/A"}</strong><span>${tokens}</span></div>
+      <div class="history-meta"><span>${workspace.completed_tasks ?? 0}/${workspace.total_tasks ?? 0} 任务</span><span>data ${data.data_version || "N/A"}</span></div>
+    </div>`;
+  }).join("") : '<div class="history-empty">保存一次私人工作状态后，这里会出现历史记录。</div>';
 }
 
 function renderProgress() {
@@ -312,6 +335,9 @@ async function saveState() {
   const response = await fetch("/api/state", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(currentState()) });
   if (!response.ok) throw new Error("状态保存失败");
   app.state = await response.json();
+  const historyResponse = await fetch("/api/history");
+  app.history = historyResponse.ok ? await historyResponse.json() : [];
+  renderHistory();
   byId("save-status").textContent = `已保存 ${new Date(app.state.saved_at).toLocaleString("zh-CN")}`;
 }
 
@@ -334,7 +360,7 @@ function renderDashboard() {
   renderMetricChart(rows);
   renderComparisonChart(rows);
   renderVolumeChart(rows);
-  renderScopeChart();
+  if (app.payload.scope_sensitivity.length) renderScopeChart();
   renderCoverageTable();
 }
 
@@ -364,10 +390,19 @@ function showError(error) {
 
 async function initialize() {
   chartDefaults();
-  const [payloadResponse, stateResponse] = await Promise.all([fetch("/api/dashboard"), fetch("/api/state")]);
+  const [payloadResponse, stateResponse, historyResponse] = await Promise.all([fetch("/api/dashboard"), fetch("/api/state"), fetch("/api/history")]);
   if (!payloadResponse.ok) throw new Error((await payloadResponse.json()).error || "数据载入失败");
   app.payload = await payloadResponse.json();
   app.state = await stateResponse.json();
+  app.history = historyResponse.ok ? await historyResponse.json() : [];
+  const isPublic = app.payload.metadata.access_mode === "public_read_only";
+  document.body.dataset.mode = isPublic ? "public" : "private";
+  byId("save-state").hidden = isPublic;
+  byId("save-status").hidden = isPublic;
+  byId("public-status").hidden = !isPublic;
+  document.querySelector('[data-view="workspace"]').hidden = isPublic;
+  byId("view-workspace").hidden = isPublic;
+  byId("scope-panel").hidden = !app.payload.scope_sensitivity.length;
 
   renderTokens();
   renderMetricOptions();
@@ -378,12 +413,20 @@ async function initialize() {
   byId("date-start").value = app.state.date_start || app.payload.metadata.start_date;
   byId("date-end").value = app.state.date_end || app.payload.metadata.end_date;
   byId("normalize-toggle").checked = Boolean(app.state.normalize);
-  byId("source-line").textContent = `${app.payload.metadata.source_path} · ${compact.format(app.payload.metadata.row_count)} rows · ${app.payload.metadata.grain}`;
+  const sourcePrefix = isPublic
+    ? (app.payload.metadata.synthetic ? "Synthetic sample" : "Public research snapshot")
+    : app.payload.metadata.source_path;
+  if (isPublic) {
+    byId("public-status").textContent = app.payload.metadata.synthetic
+      ? "公开只读模式 · 合成样例数据"
+      : `公开只读模式 · ${app.payload.metadata.token_count} Token 研究快照`;
+  }
+  byId("source-line").textContent = `${sourcePrefix} · ${compact.format(app.payload.metadata.row_count)} rows · ${app.payload.metadata.grain}`;
   byId("freshness").textContent = `截至 ${app.payload.metadata.end_date}`;
-  byId("save-status").textContent = app.state.saved_at ? `上次保存 ${new Date(app.state.saved_at).toLocaleString("zh-CN")}` : "尚未保存";
+  if (!isPublic) byId("save-status").textContent = app.state.saved_at ? `上次保存 ${new Date(app.state.saved_at).toLocaleString("zh-CN")}` : "尚未保存";
 
   renderFactorControls();
-  renderWorkspace();
+  if (!isPublic) renderWorkspace();
   bindEvents();
   renderDashboard();
   renderFactorChart();

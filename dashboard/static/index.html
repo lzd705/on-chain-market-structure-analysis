@@ -57,6 +57,7 @@
           </button>
         </div>
         <div id="save-status" class="save-status">本地状态待载入</div>
+        <div id="public-status" class="public-status" hidden>公开只读模式 · 合成样例数据</div>
       </aside>
 
       <main class="main-content">
@@ -111,7 +112,7 @@
               <div class="chart-wrap"><canvas id="volume-chart"></canvas></div>
             </article>
 
-            <article class="panel panel-wide">
+            <article id="scope-panel" class="panel panel-wide">
               <div class="panel-header">
                 <div>
                   <h2>CEX 口径敏感性</h2>
@@ -199,6 +200,13 @@
                 <div><h2>数据状态</h2><p>当前看板读取的本地数据快照</p></div>
               </div>
               <div id="data-status-grid" class="data-status-grid"></div>
+            </article>
+
+            <article class="panel panel-wide">
+              <div class="panel-header">
+                <div><h2>保存历史</h2><p>追加记录数据版本、筛选条件与任务进度</p></div>
+              </div>
+              <div id="history-list" class="history-list"></div>
             </article>
           </div>
         </section>

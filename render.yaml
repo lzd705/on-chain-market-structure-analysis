@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: onchain-market-structure
+    runtime: docker
+    branch: feature/research-report
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: singapore
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    maxShutdownDelaySeconds: 30
