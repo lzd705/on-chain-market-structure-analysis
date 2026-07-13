@@ -2,7 +2,7 @@
 
 ## Scope
 
-The event table covers the ten tokens in `config/tokens.csv` and the daily panel period from 2026-01-09 through 2026-07-05. The first version searches for three event types:
+The event table covers the 30 tokens in `config/tokens.csv` and the daily panel period from 2026-01-09 through 2026-07-05. It searches for three event types:
 
 - token unlocks
 - token airdrops or claim starts
@@ -30,8 +30,30 @@ Unknown sizes are blank. They are not inferred from a later token price or copie
 | CRV | 0 | Ongoing protocol emissions are continuous and are not converted into arbitrary event days. |
 | PENDLE | 0 | Official documentation says team and investor tokens are fully vested; weekly incentives and terminal inflation are continuous emissions. |
 | PEPE | 0 | No qualifying unlock, airdrop, or new listing was verified in the panel period. |
+| COMP | 0 | Governance distribution is continuous and is not converted into an arbitrary event day. |
+| MORPHO | 6 | Official documentation confirms linear vesting; monthly dates are cross-checked with the team-verified Tokenomics schedule. |
+| SUSHI | 0 | No qualifying discrete unlock, airdrop, or new listing was verified in the panel period. |
+| 1INCH | 0 | The tracked allocation unlocks were complete before the panel period. |
+| CAKE | 0 | Ongoing emissions are continuous and are not converted into arbitrary event days. |
+| GMX | 0 | The tracked allocation unlocks were complete before the panel period. |
+| SNX | 0 | The tracked vesting schedule ended before the panel period. |
+| ONDO | 1 | The team-verified schedule identifies the annual allocation unlock on 2026-01-18. |
+| EIGEN | 6 | The official announcement confirms monthly investor and early-contributor vesting; dates are cross-checked with Tokenomics. |
+| ETHFI | 6 | Official allocations confirm multi-year vesting; monthly dates are cross-checked with Tokenomics. |
+| GRT | 6 | Official distribution material confirms long-term vesting; monthly dates are cross-checked with Tokenomics. |
+| ENS | 5 | The January date is outside the panel; February through June monthly contributor unlocks are retained. |
+| WLD | 0 | Official material describes daily linear unlocks, so third-party monthly aggregation dates are not treated as discrete events. |
+| STRK | 6 | Official Starknet documentation specifies an unlock on the 15th of each month. The official date is used instead of a conflicting third-party monthly aggregation date. |
+| ZK | 6 | Official documentation confirms monthly investor and team vesting; dates are cross-checked with Tokenomics. |
+| JUP | 1 | The 2026 Jupuary distribution was postponed; the separate Mercurial-stakeholder release tied to the net-zero proposal is retained. |
+| RAY | 0 | Scheduled allocation unlocks ended before the panel; ongoing mining rewards are continuous emissions. |
+| JTO | 5 | The January date is outside the panel; February through June investor and contributor unlocks are retained. |
+| BONK | 0 | The tracked allocation unlocks were complete before the panel period. |
+| SHIB | 0 | No qualifying unlock, airdrop, or new listing was verified in the panel period. |
 
-All ten tokens already have CEX observations from the start of the collected CEX panel on all ten included exchanges. Therefore, the current CEX dataset does not identify a new covered-exchange listing during the study window.
+The expanded collection adds 48 source-backed events for the 20 new tokens. Together with the original 19 records, the candidate and processed tables contain 67 events. Of these, 62 have a complete `[-7, +14]` event window inside the price and volume panel and are analysis-eligible.
+
+The current CEX panel does not by itself prove that a token was newly listed. A `cex_listing` event is added only when a dated exchange announcement can be verified; ordinary first observations or missing exchange rows are not treated as listing events.
 
 ## Important limitations
 
