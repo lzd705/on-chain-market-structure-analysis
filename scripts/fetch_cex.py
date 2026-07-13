@@ -20,8 +20,12 @@ from pathlib import Path
 
 TOKEN_CONFIG_PATH = Path("config/tokens.csv")
 EXCHANGE_OUTPUT_PATH = Path("data/processed/cex_exchange_volume_daily.csv")
+COVERAGE_OUTPUT_PATH = Path("data/processed/cex_exchange_coverage.csv")
 OUTPUT_PATH = Path("data/processed/cex_volume_daily.csv")
 LIMIT_DAYS = 180
+MIN_HISTORY_DAYS = 120
+MIN_EXCHANGE_COUNT = 3
+PRICE_EXCHANGE = "binance"
 
 BINANCE_BASE_URLS = [
     "https://api.binance.com",
@@ -680,11 +684,121 @@ def build_rows(token_rows):
     return all_rows
 
 
-def aggregate_cex_rows(rows, required_exchange_count=None):
+def select_stable_exchanges(
+    rows,
+    minimum_history_days=MIN_HISTORY_DAYS,
+    minimum_exchange_count=MIN_EXCHANGE_COUNT,
+    price_exchange=PRICE_EXCHANGE,
+):
+    """Select one fixed exchange set for each token."""
+    dates_by_token_exchange = {}
+
+    for row in rows:
+        key = (row["token_symbol"], row["exchange"])
+
+        if key not in dates_by_token_exchange:
+            dates_by_token_exchange[key] = set()
+
+        dates_by_token_exchange[key].add(row["date"])
+
+    stable_by_token = {}
+
+    for key in sorted(dates_by_token_exchange.keys()):
+        token_symbol, exchange = key
+        observation_days = len(dates_by_token_exchange[key])
+
+        if observation_days < minimum_history_days:
+            continue
+
+        if token_symbol not in stable_by_token:
+            stable_by_token[token_symbol] = []
+
+        stable_by_token[token_symbol].append(exchange)
+
+    selected_by_token = {}
+
+    for token_symbol in sorted(stable_by_token.keys()):
+        exchanges = sorted(stable_by_token[token_symbol])
+
+        if len(exchanges) < minimum_exchange_count:
+            continue
+        if price_exchange not in exchanges:
+            continue
+
+        selected_by_token[token_symbol] = exchanges
+
+    return selected_by_token
+
+
+def build_coverage_rows(
+    rows,
+    stable_exchanges_by_token,
+    token_symbols=None,
+    exchanges=None,
+):
+    """Summarize raw observation coverage for each token and exchange."""
+    dates_by_token_exchange = {}
+
+    for row in rows:
+        key = (row["token_symbol"], row["exchange"])
+
+        if key not in dates_by_token_exchange:
+            dates_by_token_exchange[key] = set()
+
+        dates_by_token_exchange[key].add(row["date"])
+
+    coverage_keys = set(dates_by_token_exchange.keys())
+
+    if token_symbols is not None and exchanges is not None:
+        for token_symbol in token_symbols:
+            for exchange in exchanges:
+                coverage_keys.add((token_symbol, exchange))
+
+    coverage_rows = []
+
+    for key in sorted(coverage_keys):
+        token_symbol, exchange = key
+        dates = sorted(dates_by_token_exchange.get(key, set()))
+        selected_exchanges = stable_exchanges_by_token.get(token_symbol, [])
+
+        first_date = ""
+        last_date = ""
+
+        if dates:
+            first_date = dates[0]
+            last_date = dates[-1]
+
+        coverage_rows.append(
+            {
+                "token_symbol": token_symbol,
+                "exchange": exchange,
+                "observation_days": len(dates),
+                "first_date": first_date,
+                "last_date": last_date,
+                "is_selected": 1 if exchange in selected_exchanges else 0,
+            }
+        )
+
+    return coverage_rows
+
+
+def aggregate_cex_rows(
+    rows,
+    required_exchange_count=None,
+    stable_exchanges_by_token=None,
+):
     """Aggregate exchange-level rows into token-date CEX volume rows."""
     grouped_rows = {}
 
     for row in rows:
+        token_symbol = row["token_symbol"]
+
+        if stable_exchanges_by_token is not None:
+            selected_exchanges = stable_exchanges_by_token.get(token_symbol, [])
+
+            if row["exchange"] not in selected_exchanges:
+                continue
+
         key = (row["date"], row["token_symbol"])
 
         if key not in grouped_rows:
@@ -708,6 +822,15 @@ def aggregate_cex_rows(rows, required_exchange_count=None):
     for key in sorted(grouped_rows.keys()):
         grouped = grouped_rows[key]
         exchanges = sorted(grouped["exchanges"])
+
+        if stable_exchanges_by_token is not None:
+            selected_exchanges = stable_exchanges_by_token.get(
+                grouped["token_symbol"],
+                [],
+            )
+
+            if exchanges != selected_exchanges:
+                continue
 
         if required_exchange_count is not None:
             if len(exchanges) < required_exchange_count:
@@ -747,7 +870,7 @@ def write_exchange_rows(rows, output_path: Path):
     rows = sorted(rows, key=lambda row: (row["token_symbol"], row["exchange"], row["date"]))
 
     with output_path.open("w", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer = csv.DictWriter(file, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -766,7 +889,26 @@ def write_aggregated_rows(rows, output_path: Path):
     ]
 
     with output_path.open("w", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer = csv.DictWriter(file, fieldnames=fieldnames, lineterminator="\n")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
+def write_coverage_rows(rows, output_path: Path):
+    """Write token-exchange coverage information."""
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = [
+        "token_symbol",
+        "exchange",
+        "observation_days",
+        "first_date",
+        "last_date",
+        "is_selected",
+    ]
+
+    with output_path.open("w", newline="") as file:
+        writer = csv.DictWriter(file, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -775,12 +917,29 @@ def main() -> None:
     """Fetch CEX data into processed CSV files."""
     token_rows = read_token_config(TOKEN_CONFIG_PATH)
     rows = build_rows(token_rows)
-    aggregated_rows = aggregate_cex_rows(rows, required_exchange_count=len(EXCHANGES))
+    stable_exchanges = select_stable_exchanges(rows)
+    token_symbols = []
+
+    for token in token_rows:
+        token_symbols.append(token["token_symbol"])
+
+    coverage_rows = build_coverage_rows(
+        rows,
+        stable_exchanges,
+        token_symbols=token_symbols,
+        exchanges=EXCHANGES,
+    )
+    aggregated_rows = aggregate_cex_rows(
+        rows,
+        stable_exchanges_by_token=stable_exchanges,
+    )
 
     write_exchange_rows(rows, EXCHANGE_OUTPUT_PATH)
+    write_coverage_rows(coverage_rows, COVERAGE_OUTPUT_PATH)
     write_aggregated_rows(aggregated_rows, OUTPUT_PATH)
 
     print("Wrote %s rows to %s" % (len(rows), EXCHANGE_OUTPUT_PATH))
+    print("Wrote %s rows to %s" % (len(coverage_rows), COVERAGE_OUTPUT_PATH))
     print("Wrote %s rows to %s" % (len(aggregated_rows), OUTPUT_PATH))
 
 

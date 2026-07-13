@@ -1,4 +1,6 @@
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
 from scripts.fetch_cex import convert_binance_kline
 from scripts.fetch_cex import convert_bybit_kline
@@ -21,6 +23,9 @@ from scripts.fetch_cex import make_kucoin_symbol
 from scripts.fetch_cex import make_mexc_symbol
 from scripts.fetch_cex import make_okx_inst_id
 from scripts.fetch_cex import aggregate_cex_rows
+from scripts.fetch_cex import build_coverage_rows
+from scripts.fetch_cex import select_stable_exchanges
+from scripts.fetch_cex import write_exchange_rows
 
 
 class FetchCexTests(unittest.TestCase):
@@ -304,6 +309,161 @@ class FetchCexTests(unittest.TestCase):
         result = aggregate_cex_rows(rows, required_exchange_count=3)
 
         self.assertEqual(result, [])
+
+    def test_select_stable_exchanges_uses_full_history(self):
+        rows = []
+
+        for date in ["2024-01-01", "2024-01-02"]:
+            for exchange in ["binance", "okx", "bybit"]:
+                rows.append(
+                    {
+                        "date": date,
+                        "token_symbol": "UNI",
+                        "exchange": exchange,
+                    }
+                )
+
+        rows.append(
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "exchange": "kraken",
+            }
+        )
+
+        result = select_stable_exchanges(
+            rows,
+            minimum_history_days=2,
+            minimum_exchange_count=3,
+            price_exchange="binance",
+        )
+
+        self.assertEqual(result, {"UNI": ["binance", "bybit", "okx"]})
+
+    def test_build_coverage_rows_marks_selected_exchanges(self):
+        rows = [
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "exchange": "binance",
+            },
+            {
+                "date": "2024-01-02",
+                "token_symbol": "UNI",
+                "exchange": "binance",
+            },
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "exchange": "kraken",
+            },
+        ]
+
+        result = build_coverage_rows(rows, {"UNI": ["binance"]})
+
+        self.assertEqual(result[0]["token_symbol"], "UNI")
+        self.assertEqual(result[0]["exchange"], "binance")
+        self.assertEqual(result[0]["observation_days"], 2)
+        self.assertEqual(result[0]["first_date"], "2024-01-01")
+        self.assertEqual(result[0]["last_date"], "2024-01-02")
+        self.assertEqual(result[0]["is_selected"], 1)
+        self.assertEqual(result[1]["is_selected"], 0)
+
+    def test_build_coverage_rows_includes_missing_exchange(self):
+        rows = [
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "exchange": "binance",
+            },
+        ]
+
+        result = build_coverage_rows(
+            rows,
+            {"UNI": ["binance"]},
+            token_symbols=["UNI"],
+            exchanges=["binance", "okx"],
+        )
+
+        self.assertEqual(len(result), 2)
+        self.assertEqual(result[1]["exchange"], "okx")
+        self.assertEqual(result[1]["observation_days"], 0)
+        self.assertEqual(result[1]["first_date"], "")
+        self.assertEqual(result[1]["last_date"], "")
+        self.assertEqual(result[1]["is_selected"], 0)
+
+    def test_write_exchange_rows_uses_lf_line_endings(self):
+        rows = [
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "exchange": "binance",
+                "cex_symbol": "UNI/USDT",
+                "open": 7.10,
+                "high": 7.50,
+                "low": 7.00,
+                "close": 7.30,
+                "base_volume": 1000.0,
+                "quote_volume_usd": 7300.0,
+            },
+        ]
+
+        with TemporaryDirectory() as directory:
+            output_path = Path(directory) / "rows.csv"
+            write_exchange_rows(rows, output_path)
+            content = output_path.read_bytes()
+
+        self.assertNotIn(b"\r\n", content)
+
+    def test_aggregate_cex_rows_requires_complete_stable_set(self):
+        rows = [
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "exchange": "binance",
+                "close": 7.30,
+                "quote_volume_usd": 100.0,
+            },
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "exchange": "okx",
+                "close": 7.31,
+                "quote_volume_usd": 200.0,
+            },
+            {
+                "date": "2024-01-01",
+                "token_symbol": "UNI",
+                "exchange": "bybit",
+                "close": 7.32,
+                "quote_volume_usd": 300.0,
+            },
+            {
+                "date": "2024-01-02",
+                "token_symbol": "UNI",
+                "exchange": "binance",
+                "close": 7.40,
+                "quote_volume_usd": 110.0,
+            },
+            {
+                "date": "2024-01-02",
+                "token_symbol": "UNI",
+                "exchange": "bybit",
+                "close": 7.42,
+                "quote_volume_usd": 310.0,
+            },
+        ]
+
+        result = aggregate_cex_rows(
+            rows,
+            stable_exchanges_by_token={
+                "UNI": ["binance", "bybit", "okx"],
+            },
+        )
+
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["date"], "2024-01-01")
+        self.assertEqual(result[0]["cex_volume_usd"], 600.0)
 
 
 if __name__ == "__main__":
