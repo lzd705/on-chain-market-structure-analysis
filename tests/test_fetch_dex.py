@@ -14,10 +14,90 @@ from scripts.fetch_dex import aggregate_dex_pool_rows
 from scripts.fetch_dex import filter_complete_dates
 from scripts.fetch_dex import sort_pools_by_volume
 from scripts.fetch_dex import write_pool_rows
+from scripts.fetch_dex import read_token_config
+from scripts.fetch_dex import read_token_chain_config
+from scripts.fetch_dex import TOKEN_CONFIG_PATH
+from scripts.fetch_dex import TOKEN_CHAIN_CONFIG_PATH
+from scripts.fetch_dex import REQUEST_SLEEP_SECONDS
+from scripts.fetch_dex import filter_token_rows
+from scripts.fetch_dex import replace_token_rows
+from scripts.fetch_dex import deduplicate_pool_volume_rows
 from scripts.fetch_dex import TOP_POOL_COUNT
 
 
 class FetchDexTests(unittest.TestCase):
+    def test_every_configured_token_has_chain_config(self):
+        token_rows = read_token_config(TOKEN_CONFIG_PATH)
+        chain_rows = read_token_chain_config(TOKEN_CHAIN_CONFIG_PATH, token_rows)
+        grouped_rows = group_chain_rows_by_token(chain_rows)
+
+        configured_tokens = set()
+        for token in token_rows:
+            configured_tokens.add(token["token_symbol"])
+
+        self.assertEqual(configured_tokens, set(grouped_rows.keys()))
+
+    def test_request_sleep_matches_public_rate_limit(self):
+        self.assertEqual(REQUEST_SLEEP_SECONDS, 15.0)
+
+    def test_filter_token_rows_keeps_requested_tokens(self):
+        rows = [
+            {"token_symbol": "UNI"},
+            {"token_symbol": "AAVE"},
+            {"token_symbol": "COMP"},
+        ]
+
+        result = filter_token_rows(rows, ["COMP", "AAVE"])
+
+        self.assertEqual(
+            result,
+            [
+                {"token_symbol": "AAVE"},
+                {"token_symbol": "COMP"},
+            ],
+        )
+
+    def test_replace_token_rows_keeps_unselected_existing_rows(self):
+        existing_rows = [
+            {"token_symbol": "UNI", "value": "old uni"},
+            {"token_symbol": "COMP", "value": "old comp"},
+        ]
+        new_rows = [
+            {"token_symbol": "COMP", "value": "new comp"},
+        ]
+
+        result = replace_token_rows(existing_rows, new_rows, ["COMP"])
+
+        self.assertEqual(
+            result,
+            [
+                {"token_symbol": "UNI", "value": "old uni"},
+                {"token_symbol": "COMP", "value": "new comp"},
+            ],
+        )
+
+    def test_deduplicate_pool_volume_rows_keeps_one_daily_pool_row(self):
+        first_row = {
+            "date": "2026-01-14",
+            "token_symbol": "COMP",
+            "chain": "eth",
+            "pool_address": "0xpool",
+            "open": 26.55,
+            "dex_volume_usd": 3991.05,
+        }
+        duplicate_row = {
+            "date": "2026-01-14",
+            "token_symbol": "COMP",
+            "chain": "eth",
+            "pool_address": "0xpool",
+            "open": 27.23,
+            "dex_volume_usd": 3991.05,
+        }
+
+        result = deduplicate_pool_volume_rows([first_row, duplicate_row])
+
+        self.assertEqual(result, [first_row])
+
     def test_safe_float_converts_missing_values_to_zero(self):
         self.assertEqual(safe_float(None), 0.0)
         self.assertEqual(safe_float(""), 0.0)
@@ -252,6 +332,9 @@ class FetchDexTests(unittest.TestCase):
             text = output_path.read_text()
             self.assertIn("base_token_id", text)
             self.assertIn("quote_token_id", text)
+
+            content = output_path.read_bytes()
+            self.assertNotIn(b"\r\n", content)
 
     def test_aggregate_dex_pool_rows_sums_top_pool_volume(self):
         rows = [

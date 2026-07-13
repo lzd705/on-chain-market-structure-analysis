@@ -10,6 +10,7 @@ This first version is intentionally simple:
     - Write data/processed/dex_volume_daily.csv
 """
 
+import argparse
 import csv
 import json
 import time
@@ -133,6 +134,69 @@ def read_token_config(path: Path):
         rows = list(reader)
 
     return rows
+
+
+def filter_token_rows(rows, token_symbols):
+    """Keep configured tokens requested by the caller."""
+    if token_symbols is None:
+        return rows
+
+    requested = set()
+    for token_symbol in token_symbols:
+        requested.add(token_symbol.upper())
+
+    result = []
+    for row in rows:
+        if row["token_symbol"].upper() in requested:
+            result.append(row)
+
+    return result
+
+
+def read_csv_rows(path):
+    """Read an existing pipeline CSV if it exists."""
+    if not path.exists():
+        return []
+
+    with path.open("r", newline="") as file:
+        return list(csv.DictReader(file))
+
+
+def replace_token_rows(existing_rows, new_rows, token_symbols):
+    """Replace selected-token rows while preserving other tokens."""
+    selected = set()
+    for token_symbol in token_symbols:
+        selected.add(token_symbol.upper())
+
+    result = []
+    for row in existing_rows:
+        if row["token_symbol"].upper() not in selected:
+            result.append(row)
+
+    result.extend(new_rows)
+    return result
+
+
+def deduplicate_pool_volume_rows(rows):
+    """Keep one row for each token-pool-date combination."""
+    seen = set()
+    result = []
+
+    for row in rows:
+        key = (
+            row["date"],
+            row["token_symbol"],
+            row["chain"],
+            row["pool_address"],
+        )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        result.append(row)
+
+    return result
 
 
 def group_chain_rows_by_token(rows):
@@ -528,7 +592,7 @@ def write_pool_rows(pools, output_path: Path):
     ]
 
     with output_path.open("w", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer = csv.DictWriter(file, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerows(pools)
 
@@ -555,7 +619,7 @@ def write_pool_volume_rows(rows, output_path: Path):
     rows = sorted(rows, key=lambda row: (row["token_symbol"], row["date"]))
 
     with output_path.open("w", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer = csv.DictWriter(file, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
@@ -578,16 +642,13 @@ def write_volume_rows(rows, output_path: Path):
     rows = sorted(rows, key=lambda row: (row["token_symbol"], row["date"]))
 
     with output_path.open("w", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=fieldnames)
+        writer = csv.DictWriter(file, fieldnames=fieldnames, lineterminator="\n")
         writer.writeheader()
         writer.writerows(rows)
 
 
-def main() -> None:
-    """Fetch DEX data into processed CSV files."""
-    token_rows = read_token_config(TOKEN_CONFIG_PATH)
-    chain_rows = read_token_chain_config(TOKEN_CHAIN_CONFIG_PATH, token_rows)
-    chain_rows_by_token = group_chain_rows_by_token(chain_rows)
+def fetch_selected_tokens(token_rows, chain_rows_by_token):
+    """Fetch selected pools and pool-level rows for configured tokens."""
     selected_pools = []
     pool_volume_rows = []
 
@@ -626,8 +687,44 @@ def main() -> None:
         print("Fetched %s DEX pools: %s" % (token_symbol, len(pool_results)))
         time.sleep(REQUEST_SLEEP_SECONDS)
 
+    return selected_pools, pool_volume_rows
+
+
+def main(token_symbols=None, append=False) -> None:
+    """Fetch DEX data into processed CSV files."""
+    all_token_rows = read_token_config(TOKEN_CONFIG_PATH)
+    token_rows = filter_token_rows(all_token_rows, token_symbols)
+    chain_rows = read_token_chain_config(TOKEN_CHAIN_CONFIG_PATH, all_token_rows)
+    chain_rows_by_token = group_chain_rows_by_token(chain_rows)
+
+    selected_pools, pool_volume_rows = fetch_selected_tokens(
+        token_rows,
+        chain_rows_by_token,
+    )
+
+    expected_token_count = len(token_rows)
+
+    if append:
+        if token_symbols is None:
+            raise ValueError("--append requires --tokens")
+
+        existing_pools = read_csv_rows(DEX_POOLS_OUTPUT_PATH)
+        existing_pool_volume_rows = read_csv_rows(DEX_POOL_VOLUME_OUTPUT_PATH)
+        selected_pools = replace_token_rows(
+            existing_pools,
+            selected_pools,
+            token_symbols,
+        )
+        pool_volume_rows = replace_token_rows(
+            existing_pool_volume_rows,
+            pool_volume_rows,
+            token_symbols,
+        )
+        expected_token_count = len(all_token_rows)
+
+    pool_volume_rows = deduplicate_pool_volume_rows(pool_volume_rows)
     volume_rows = aggregate_dex_pool_rows(pool_volume_rows)
-    volume_rows = filter_complete_dates(volume_rows, len(token_rows))
+    volume_rows = filter_complete_dates(volume_rows, expected_token_count)
 
     write_pool_rows(selected_pools, DEX_POOLS_OUTPUT_PATH)
     write_pool_volume_rows(pool_volume_rows, DEX_POOL_VOLUME_OUTPUT_PATH)
@@ -638,5 +735,31 @@ def main() -> None:
     print("Wrote %s rows to %s" % (len(volume_rows), DEX_VOLUME_OUTPUT_PATH))
 
 
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Fetch GeckoTerminal DEX data")
+    parser.add_argument(
+        "--tokens",
+        help="Comma-separated token symbols to refresh",
+    )
+    parser.add_argument(
+        "--append",
+        action="store_true",
+        help="Replace selected tokens and preserve existing token rows",
+    )
+    args = parser.parse_args()
+
+    token_symbols = None
+    if args.tokens:
+        token_symbols = []
+        for token_symbol in args.tokens.split(","):
+            cleaned = token_symbol.strip().upper()
+            if cleaned:
+                token_symbols.append(cleaned)
+
+    return token_symbols, args.append
+
+
 if __name__ == "__main__":
-    main()
+    selected_tokens, append_rows = parse_args()
+    main(selected_tokens, append_rows)
