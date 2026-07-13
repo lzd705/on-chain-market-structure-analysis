@@ -21,11 +21,15 @@ class RunPipelineTests(unittest.TestCase):
         def fake_build_factor_return_panel():
             steps.append("build_factor_return_panel")
 
+        def fake_build_event_table():
+            steps.append("build_event_table")
+
         run_pipeline(
             build_panel=fake_build_panel,
             build_research_panel=fake_build_research_panel,
             build_factors=fake_build_factors,
             build_factor_return_panel=fake_build_factor_return_panel,
+            build_event_table=fake_build_event_table,
         )
 
         self.assertEqual(
@@ -35,6 +39,7 @@ class RunPipelineTests(unittest.TestCase):
                 "build_research_panel",
                 "build_factors",
                 "build_factor_return_panel",
+                "build_event_table",
             ],
         )
 
@@ -59,6 +64,9 @@ class RunPipelineTests(unittest.TestCase):
         def fake_build_factor_return_panel():
             steps.append("build_factor_return_panel")
 
+        def fake_build_event_table():
+            steps.append("build_event_table")
+
         run_pipeline(
             fetch=True,
             fetch_cex=fake_fetch_cex,
@@ -67,6 +75,7 @@ class RunPipelineTests(unittest.TestCase):
             build_research_panel=fake_build_research_panel,
             build_factors=fake_build_factors,
             build_factor_return_panel=fake_build_factor_return_panel,
+            build_event_table=fake_build_event_table,
         )
 
         self.assertEqual(
@@ -78,6 +87,7 @@ class RunPipelineTests(unittest.TestCase):
                 "build_research_panel",
                 "build_factors",
                 "build_factor_return_panel",
+                "build_event_table",
             ],
         )
 
@@ -94,6 +104,7 @@ class RunPipelineTests(unittest.TestCase):
         self.assertIn("research rows to data/processed/research_panel.csv", result.stdout)
         self.assertIn("factor rows to data/processed/factor_table.csv", result.stdout)
         self.assertIn("factor return rows to data/processed/factor_return_panel.csv", result.stdout)
+        self.assertIn("event rows to data/processed/event_table.csv", result.stdout)
 
 
 if __name__ == "__main__":

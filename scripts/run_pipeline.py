@@ -5,6 +5,7 @@ Default behavior:
     - Build research_panel.csv with realized and future returns.
     - Build factor_table.csv.
     - Build factor_return_panel.csv for factor testing.
+    - Build event_table.csv from curated event candidates.
 
 Optional behavior:
     - Use --fetch to refresh CEX and DEX data before rebuilding the panel.
@@ -23,6 +24,7 @@ from scripts import build_panel as build_panel_module
 from scripts import build_factor_return_panel as build_factor_return_panel_module
 from scripts import build_factors as build_factors_module
 from scripts import build_research_panel as build_research_panel_module
+from scripts import build_event_table as build_event_table_module
 from scripts import fetch_cex as fetch_cex_module
 from scripts import fetch_dex as fetch_dex_module
 
@@ -35,6 +37,7 @@ def run_pipeline(
     build_research_panel=None,
     build_factors=None,
     build_factor_return_panel=None,
+    build_event_table=None,
 ):
     """Run the data pipeline."""
     if fetch_cex is None:
@@ -55,6 +58,9 @@ def run_pipeline(
     if build_factor_return_panel is None:
         build_factor_return_panel = build_factor_return_panel_module.main
 
+    if build_event_table is None:
+        build_event_table = build_event_table_module.main
+
     if fetch:
         print("Refreshing CEX data")
         fetch_cex()
@@ -69,6 +75,8 @@ def run_pipeline(
     build_factors()
     print("Building factor return panel")
     build_factor_return_panel()
+    print("Building event table")
+    build_event_table()
 
 
 def parse_args():

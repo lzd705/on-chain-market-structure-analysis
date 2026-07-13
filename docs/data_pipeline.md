@@ -14,6 +14,8 @@ config/tokens.csv
   -> export merged_volume_panel.csv
   -> calculate realized and future returns
   -> export research_panel.csv
+  -> validate curated event candidates
+  -> export event_table.csv
 ```
 
 ## DEX outputs
@@ -72,6 +74,20 @@ future_return_7d = price_{t+7} / price_t - 1
 
 `future_return_*` columns use future prices, so they are labels for factor
 testing only. They should not be used as same-day factor inputs.
+
+## Event table
+
+`data/curated/event_candidates.csv` stores source-backed unlock, airdrop, and
+CEX listing candidates. Event discovery is curated because the project does
+not use a paid historical event API.
+
+`scripts/build_event_table.py` makes the transformation reproducible. It
+validates tokens, event types, UTC dates, numeric fields, and sources; removes
+duplicates; calculates the `-7/+14` event window; and writes
+`data/processed/event_table.csv`.
+
+Unknown event sizes remain blank. The pipeline does not estimate them or label
+events as bullish or bearish.
 
 ## Next factor columns
 
