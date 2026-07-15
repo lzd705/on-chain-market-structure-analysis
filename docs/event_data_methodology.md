@@ -6,7 +6,7 @@ The event table covers the 30 tokens in `config/tokens.csv` and the daily panel 
 
 - token unlocks
 - token airdrops or claim starts
-- new spot listings on the ten CEXs already collected by the project
+- new spot listings on the configured CEXs already collected by the project
 
 The candidate file is `data/curated/event_candidates.csv`. The standardized output is `data/processed/event_table.csv`.
 

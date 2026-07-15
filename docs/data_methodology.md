@@ -6,8 +6,8 @@ This document should explain how the data pipeline builds the CEX / DEX daily vo
 
 - Frequency: daily
 - Initial target window: recent 3-6 months
-- Initial sample size: 10-20 tokens
-- CEX coverage: 10 major spot exchanges
+- Current sample size: 30 tokens
+- CEX coverage: 12 configured spot exchanges
 - DEX coverage: global top 5 pools across configured chains for each token
 
 Current CEX exchanges:
@@ -23,6 +23,8 @@ MEXC
 HTX
 Coinbase
 Kraken
+Crypto.com
+Upbit
 ```
 
 ## Core outputs
@@ -37,6 +39,8 @@ Kraken
 
 - Raw wallet-level swap attribution is out of scope for the first version.
 - CEX volume is major-exchange coverage, not guaranteed total CEX market volume.
-- Coinbase and Kraken candles provide base volume, so quote volume is approximated as close price times base volume.
+- Coinbase, Kraken, and Crypto.com candles provide base volume, so quote volume is approximated as close price times base volume.
+- Upbit uses the KRW market when available and converts each day through the Upbit KRW-USDT close; it falls back to the USDT market when needed.
+- Each exchange contributes one preferred spot pair per token. The result is a consistent major-exchange proxy, not the sum of every pair traded on an exchange.
 - DEX volume is multi-chain top-pool coverage, not guaranteed total cross-chain DEX market volume.
 - DEX pool selection must be documented per token in `data/processed/dex_pools.csv`.

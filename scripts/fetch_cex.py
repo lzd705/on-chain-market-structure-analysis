@@ -43,6 +43,8 @@ EXCHANGES = [
     "htx",
     "coinbase",
     "kraken",
+    "crypto_com",
+    "upbit",
 ]
 
 
@@ -96,6 +98,17 @@ def make_kraken_pair(cex_symbol: str) -> str:
     """Convert UNI/USDT to UNIUSD for Kraken REST API."""
     base_asset = cex_symbol.split("/")[0].upper()
     return base_asset + "USD"
+
+
+def make_crypto_com_instrument(cex_symbol: str) -> str:
+    """Convert UNI/USDT to UNI_USDT for Crypto.com."""
+    return cex_symbol.replace("/", "_").upper()
+
+
+def make_upbit_market_candidates(cex_symbol: str):
+    """Return Upbit markets in preferred quote-currency order."""
+    base_asset = cex_symbol.split("/")[0].upper()
+    return ["KRW-" + base_asset, "USDT-" + base_asset]
 
 
 def convert_binance_kline(kline, token_symbol: str, cex_symbol: str, exchange: str):
@@ -315,6 +328,55 @@ def convert_kraken_kline(kline, token_symbol: str, cex_symbol: str):
         "close": close,
         "base_volume": base_volume,
         "quote_volume_usd": close * base_volume,
+    }
+
+    return row
+
+
+def convert_crypto_com_candle(candle, token_symbol: str, cex_symbol: str):
+    """Convert one Crypto.com candle into one output CSV row.
+
+    Crypto.com candles provide base volume, so quote volume is approximated as
+    close price times base volume.
+    """
+    open_time_ms = int(candle["t"])
+    date = datetime.fromtimestamp(open_time_ms / 1000, timezone.utc).strftime("%Y-%m-%d")
+    close = float(candle["c"])
+    base_volume = float(candle["v"])
+
+    row = {
+        "date": date,
+        "token_symbol": token_symbol,
+        "exchange": "crypto_com",
+        "cex_symbol": cex_symbol,
+        "open": float(candle["o"]),
+        "high": float(candle["h"]),
+        "low": float(candle["l"]),
+        "close": close,
+        "base_volume": base_volume,
+        "quote_volume_usd": close * base_volume,
+    }
+
+    return row
+
+
+def convert_upbit_candle(candle, token_symbol: str, quote_to_usd: float):
+    """Convert one Upbit candle and its quote currency into USD."""
+    market = candle["market"]
+    quote_asset, base_asset = market.split("-", 1)
+    date = candle["candle_date_time_utc"][:10]
+
+    row = {
+        "date": date,
+        "token_symbol": token_symbol,
+        "exchange": "upbit",
+        "cex_symbol": base_asset + "/" + quote_asset,
+        "open": float(candle["opening_price"]) * quote_to_usd,
+        "high": float(candle["high_price"]) * quote_to_usd,
+        "low": float(candle["low_price"]) * quote_to_usd,
+        "close": float(candle["trade_price"]) * quote_to_usd,
+        "base_volume": float(candle["candle_acc_trade_volume"]),
+        "quote_volume_usd": float(candle["candle_acc_trade_price"]) * quote_to_usd,
     }
 
     return row
@@ -546,6 +608,94 @@ def fetch_kraken_klines(pair: str, limit_days: int):
     return rows[-limit_days:]
 
 
+def fetch_crypto_com_candles(instrument_name: str, limit_days: int):
+    """Fetch daily candles from Crypto.com."""
+    query = {
+        "instrument_name": instrument_name,
+        "timeframe": "1D",
+        "count": str(limit_days),
+    }
+
+    encoded_query = urllib.parse.urlencode(query)
+    url = "https://api.crypto.com/exchange/v1/public/get-candlestick?" + encoded_query
+
+    data = request_json(url)
+
+    if data.get("code") != 0:
+        raise RuntimeError("Crypto.com error for %s: %s" % (instrument_name, data))
+
+    result = data.get("result", {})
+    return result.get("data", [])[-limit_days:]
+
+
+def fetch_upbit_candles(market: str, limit_days: int):
+    """Fetch daily candles from Upbit Korea."""
+    query = {
+        "market": market,
+        "count": str(limit_days),
+    }
+
+    encoded_query = urllib.parse.urlencode(query)
+    url = "https://api.upbit.com/v1/candles/days?" + encoded_query
+    data = request_json(url)
+
+    if not isinstance(data, list):
+        raise RuntimeError("Upbit error for %s: %s" % (market, data))
+
+    return data[:limit_days]
+
+
+def build_upbit_rows(token_symbol: str, cex_symbol: str, limit_days: int):
+    """Fetch the preferred available Upbit market and convert volume to USD."""
+    last_error = None
+
+    for market in make_upbit_market_candidates(cex_symbol):
+        try:
+            candles = fetch_upbit_candles(market, limit_days)
+        except Exception as error:
+            last_error = error
+            continue
+
+        if not candles:
+            continue
+
+        quote_asset = market.split("-", 1)[0]
+        quote_to_usd_by_date = {}
+
+        if quote_asset == "USDT":
+            for candle in candles:
+                date = candle["candle_date_time_utc"][:10]
+                quote_to_usd_by_date[date] = 1.0
+        elif quote_asset == "KRW":
+            reference_candles = fetch_upbit_candles("KRW-USDT", limit_days)
+
+            for reference in reference_candles:
+                date = reference["candle_date_time_utc"][:10]
+                krw_per_usdt = float(reference["trade_price"])
+
+                if krw_per_usdt > 0:
+                    quote_to_usd_by_date[date] = 1.0 / krw_per_usdt
+        else:
+            continue
+
+        rows = []
+
+        for candle in candles:
+            date = candle["candle_date_time_utc"][:10]
+            quote_to_usd = quote_to_usd_by_date.get(date)
+
+            if quote_to_usd is None:
+                continue
+
+            row = convert_upbit_candle(candle, token_symbol, quote_to_usd)
+            rows.append(row)
+
+        if rows:
+            return rows
+
+    raise RuntimeError("Failed to fetch %s on Upbit: %s" % (token_symbol, last_error))
+
+
 def fetch_exchange_rows(token_symbol: str, cex_symbol: str, exchange: str):
     """Fetch rows for one token on one exchange."""
     if exchange == "binance":
@@ -657,6 +807,20 @@ def fetch_exchange_rows(token_symbol: str, cex_symbol: str, exchange: str):
             rows.append(row)
 
         return rows
+
+    if exchange == "crypto_com":
+        instrument_name = make_crypto_com_instrument(cex_symbol)
+        candles = fetch_crypto_com_candles(instrument_name, LIMIT_DAYS)
+        rows = []
+
+        for candle in candles:
+            row = convert_crypto_com_candle(candle, token_symbol, cex_symbol)
+            rows.append(row)
+
+        return rows
+
+    if exchange == "upbit":
+        return build_upbit_rows(token_symbol, cex_symbol, LIMIT_DAYS)
 
     raise ValueError("Unsupported exchange: %s" % exchange)
 

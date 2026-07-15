@@ -28,7 +28,7 @@ each token and exchange. An exchange enters a token's fixed aggregation set
 when it has at least 120 daily observations. A token needs at least three
 stable exchanges and Binance, which supplies the reference close price.
 
-If all ten exchanges are stable, all ten are used. Otherwise, all available
+If all configured exchanges are stable, all are used. Otherwise, all available
 stable exchanges are used. A token-date is written only when every exchange
 in that token's fixed set is present, so a temporary API failure is not
 mistaken for a drop in trading volume.

@@ -6,22 +6,27 @@ from scripts.fetch_cex import convert_binance_kline
 from scripts.fetch_cex import convert_bybit_kline
 from scripts.fetch_cex import convert_bitget_kline
 from scripts.fetch_cex import convert_coinbase_candle
+from scripts.fetch_cex import convert_crypto_com_candle
 from scripts.fetch_cex import convert_gate_kline
 from scripts.fetch_cex import convert_htx_kline
 from scripts.fetch_cex import convert_kraken_kline
 from scripts.fetch_cex import convert_kucoin_kline
 from scripts.fetch_cex import convert_mexc_kline
 from scripts.fetch_cex import convert_okx_kline
+from scripts.fetch_cex import convert_upbit_candle
 from scripts.fetch_cex import make_bybit_symbol
 from scripts.fetch_cex import make_binance_symbol
 from scripts.fetch_cex import make_bitget_symbol
 from scripts.fetch_cex import make_coinbase_product_id
+from scripts.fetch_cex import make_crypto_com_instrument
 from scripts.fetch_cex import make_gate_currency_pair
 from scripts.fetch_cex import make_htx_symbol
 from scripts.fetch_cex import make_kraken_pair
 from scripts.fetch_cex import make_kucoin_symbol
 from scripts.fetch_cex import make_mexc_symbol
 from scripts.fetch_cex import make_okx_inst_id
+from scripts.fetch_cex import make_upbit_market_candidates
+from scripts.fetch_cex import MIN_EXCHANGE_COUNT
 from scripts.fetch_cex import aggregate_cex_rows
 from scripts.fetch_cex import build_coverage_rows
 from scripts.fetch_cex import select_stable_exchanges
@@ -29,6 +34,9 @@ from scripts.fetch_cex import write_exchange_rows
 
 
 class FetchCexTests(unittest.TestCase):
+    def test_default_minimum_exchange_count_is_three(self):
+        self.assertEqual(MIN_EXCHANGE_COUNT, 3)
+
     def test_make_binance_symbol_removes_slash(self):
         result = make_binance_symbol("UNI/USDT")
         self.assertEqual(result, "UNIUSDT")
@@ -55,6 +63,14 @@ class FetchCexTests(unittest.TestCase):
         self.assertEqual(make_htx_symbol("UNI/USDT"), "uniusdt")
         self.assertEqual(make_coinbase_product_id("UNI/USDT"), "UNI-USD")
         self.assertEqual(make_kraken_pair("UNI/USDT"), "UNIUSD")
+
+    def test_make_crypto_com_instrument_uses_underscore(self):
+        result = make_crypto_com_instrument("UNI/USDT")
+        self.assertEqual(result, "UNI_USDT")
+
+    def test_make_upbit_market_candidates_prefers_krw(self):
+        result = make_upbit_market_candidates("UNI/USDT")
+        self.assertEqual(result, ["KRW-UNI", "USDT-UNI"])
 
     def test_convert_binance_kline_uses_quote_volume(self):
         kline = [
@@ -250,6 +266,44 @@ class FetchCexTests(unittest.TestCase):
 
         self.assertEqual(result["date"], "2024-01-01")
         self.assertEqual(result["exchange"], "kraken")
+        self.assertEqual(result["base_volume"], 1000.0)
+        self.assertEqual(result["quote_volume_usd"], 7300.0)
+
+    def test_convert_crypto_com_candle_approximates_quote_volume(self):
+        candle = {
+            "t": 1704067200000,
+            "o": "7.10",
+            "h": "7.50",
+            "l": "7.00",
+            "c": "7.30",
+            "v": "1000",
+        }
+
+        result = convert_crypto_com_candle(candle, "UNI", "UNI/USDT")
+
+        self.assertEqual(result["date"], "2024-01-01")
+        self.assertEqual(result["exchange"], "crypto_com")
+        self.assertEqual(result["base_volume"], 1000.0)
+        self.assertEqual(result["quote_volume_usd"], 7300.0)
+
+    def test_convert_upbit_candle_converts_krw_volume_to_usd(self):
+        candle = {
+            "market": "KRW-UNI",
+            "candle_date_time_utc": "2024-01-01T00:00:00",
+            "opening_price": 7100.0,
+            "high_price": 7500.0,
+            "low_price": 7000.0,
+            "trade_price": 7300.0,
+            "candle_acc_trade_volume": 1000.0,
+            "candle_acc_trade_price": 7300000.0,
+        }
+
+        result = convert_upbit_candle(candle, "UNI", quote_to_usd=0.001)
+
+        self.assertEqual(result["date"], "2024-01-01")
+        self.assertEqual(result["exchange"], "upbit")
+        self.assertEqual(result["cex_symbol"], "UNI/KRW")
+        self.assertEqual(result["close"], 7.30)
         self.assertEqual(result["base_volume"], 1000.0)
         self.assertEqual(result["quote_volume_usd"], 7300.0)
 
